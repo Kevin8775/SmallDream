@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Assimp_lib/Assimp_lib.vcxproj" Id="e45c30b1-d821-4301-beca-3bde5121835a" />
+</Solution>
