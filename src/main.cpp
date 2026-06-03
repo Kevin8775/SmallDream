@@ -15,6 +15,7 @@
 #include "Texture.h"
 #include "TextRenderer.h"
 #include "Menu.h"
+#include "CubemapTexture.h"
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio.h>
@@ -51,6 +52,64 @@ static GLuint createQuadVAO() {
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+    return vao;
+}
+
+static GLuint createCubeVAO() {
+    float verts[] = {
+        // Front (+Z)
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        // Back (-Z)
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+        // Top (+Y)
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f, -1.0f,
+        // Bottom (-Y)
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+        // Right (+X)
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+        // Left (-X)
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+    };
+    GLuint vao, vbo;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
     return vao;
@@ -139,6 +198,18 @@ int main() {
     Texture bgTex("assets/textures/fondo.png");
     Texture logoTex("assets/textures/logo.png");
 
+    Shader skyboxShader("assets/shaders/skybox.vert", "assets/shaders/skybox.frag");
+
+    std::array<std::string, 6> skyboxFaces = {
+        "assets/textures/skybox-menu/px.png",
+        "assets/textures/skybox-menu/nx.png",
+        "assets/textures/skybox-menu/py.png",
+        "assets/textures/skybox-menu/ny.png",
+        "assets/textures/skybox-menu/pz.png",
+        "assets/textures/skybox-menu/nz.png"
+    };
+    CubemapTexture* skyboxTex = new CubemapTexture(skyboxFaces);
+
     std::vector<Texture*> spriteFrames;
     for (int i = 0; i < SPRITE_FRAMES; i++) {
         char path[128];
@@ -158,6 +229,7 @@ int main() {
     menu.init(&textRenderer, WINDOW_WIDTH, WINDOW_HEIGHT, TEXT_SCALE);
 
     GLuint quadVAO = createQuadVAO();
+    GLuint skyboxVAO = createCubeVAO();
 
     ma_engine engine;
     ma_engine_config engineConfig = ma_engine_config_init();
@@ -212,7 +284,7 @@ int main() {
         lastTime = now;
         if (dt > 0.05f) dt = 0.05f; // clamp
 
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         double mx, my;
         glfwGetCursorPos(gWindow, &mx, &my);
@@ -298,16 +370,24 @@ int main() {
 
             menu.update((float)mx, (float)my);
 
-            bgShader.use();
-            bgShader.setInt("uTexture", 0);
-            bgShader.setFloat("uBlurAmount", 0.0f);
-            bgTex.bind(0);
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::scale(model, glm::vec3(WINDOW_WIDTH, WINDOW_HEIGHT, 1.0f));
-            bgShader.setMat4("uModel", glm::value_ptr(model));
-            bgShader.setMat4("uProjection", glm::value_ptr(proj));
-            glBindVertexArray(quadVAO);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LEQUAL);
+
+            float rotAngle = (float)glfwGetTime() * 10.0f;
+            glm::mat4 skyModel = glm::rotate(glm::mat4(1.0f), glm::radians(rotAngle), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::mat4 skyProj = glm::perspective(glm::radians(90.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
+            glm::mat4 skyView = glm::mat4(1.0f);
+
+            skyboxShader.use();
+            skyboxShader.setMat4("uProjection", glm::value_ptr(skyProj));
+            skyboxShader.setMat4("uView", glm::value_ptr(skyView));
+            skyboxShader.setMat4("uModel", glm::value_ptr(skyModel));
+            skyboxShader.setInt("uSkybox", 0);
+            skyboxTex->bind(0);
+            glBindVertexArray(skyboxVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+
+            glDisable(GL_DEPTH_TEST);
 
             float sw = (float)spriteFrames[0]->getWidth();
             float sh = (float)spriteFrames[0]->getHeight();
@@ -345,6 +425,7 @@ int main() {
         glfwPollEvents();
     }
 
+    delete skyboxTex;
     for (auto* t : spriteFrames) delete t;
     delete flashlightIcon;
     delete underlineTex;
