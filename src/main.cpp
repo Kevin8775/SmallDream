@@ -9,17 +9,26 @@
 #include <cmath>
 #include <string>
 #include <algorithm>
+#include <functional>
 
 #include "Shader.h"
 #include "Texture.h"
 #include "TextRenderer.h"
 #include "Menu.h"
 
+#define MINIAUDIO_IMPLEMENTATION
+#include <miniaudio.h>
+
 static const int WINDOW_WIDTH = 1689;
 static const int WINDOW_HEIGHT = 917;
 static const int SPRITE_FRAMES = 36;
 static const float TEXT_SCALE = 0.8f;
 static const float SPRITE_X = 900.0f;
+
+enum class AppState {
+    Loading,
+    Menu
+};
 
 static GLFWwindow* gWindow = nullptr;
 
@@ -139,6 +148,7 @@ int main() {
 
     Texture* flashlightIcon = createFlashlightIcon();
     Texture* underlineTex = createWhiteTexture();
+    Texture* loadingBarTex = createWhiteTexture();
 
     TextRenderer textRenderer("assets/fonts/Roboto.ttf", 35, &textShader);
     glm::mat4 proj = glm::ortho(0.0f, (float)WINDOW_WIDTH, (float)WINDOW_HEIGHT, 0.0f);
@@ -148,6 +158,46 @@ int main() {
     menu.init(&textRenderer, WINDOW_WIDTH, WINDOW_HEIGHT, TEXT_SCALE);
 
     GLuint quadVAO = createQuadVAO();
+
+    ma_engine engine;
+    ma_engine_config engineConfig = ma_engine_config_init();
+    if (ma_engine_init(&engineConfig, &engine) != MA_SUCCESS) {
+        std::cerr << "Failed to init audio engine" << std::endl;
+        return -1;
+    }
+
+    ma_sound loadingLoop;
+    bool hasLoadingLoop = ma_sound_init_from_file(&engine, "assets/sounds/ui/loading_loop.wav", 0, nullptr, nullptr, &loadingLoop) == MA_SUCCESS;
+    if (hasLoadingLoop) {
+        ma_sound_set_looping(&loadingLoop, MA_TRUE);
+        ma_sound_start(&loadingLoop);
+    }
+
+    ma_sound loadingDone;
+    bool hasLoadingDone = false;
+    ma_sound ambientLoop;
+    bool hasAmbientLoop = false;
+
+    AppState state = AppState::Loading;
+    float loadingProgress = 0.0f;
+    float loadingPulse = 0.0f;
+    float loadingBarWidth = 520.0f;
+    float loadingBarHeight = 20.0f;
+    float loadingStepTimer = 0.0f;
+    const float loadingStepInterval = 0.18f;
+    bool loadingFinished = false;
+    float loadingFinishTimer = 0.0f;
+    const float loadingFinishHold = 0.9f;
+
+    std::vector<std::function<void()>> loadingTasks;
+    size_t loadingTaskIndex = 0;
+    for (int i = 0; i < SPRITE_FRAMES; i++) {
+        loadingTasks.push_back([&, i]() {
+            char path[128];
+            snprintf(path, sizeof(path), "assets/textures/sprites/frame_%04d.png", SPRITE_FRAMES - 1 - i);
+            spriteFrames.push_back(new Texture(path));
+        });
+    }
 
     int currentFrame = 0;
 
@@ -167,19 +217,49 @@ int main() {
         double mx, my;
         glfwGetCursorPos(gWindow, &mx, &my);
 
-        {
-            float normalizedY = (float)my / (float)WINDOW_HEIGHT;
-            if (normalizedY < 0.0f) normalizedY = 0.0f;
-            if (normalizedY > 1.0f) normalizedY = 1.0f;
-            currentFrame = (int)(normalizedY * (SPRITE_FRAMES - 1));
-        }
+        if (state == AppState::Loading) {
+            loadingPulse += dt * 4.0f;
+            loadingStepTimer += dt;
 
-        menu.update((float)mx, (float)my);
+            if (!loadingFinished && loadingTaskIndex < loadingTasks.size() && loadingStepTimer >= loadingStepInterval) {
+                loadingStepTimer = 0.0f;
+                loadingTasks[loadingTaskIndex++]();
+                loadingProgress = (float)loadingTaskIndex / (float)loadingTasks.size();
+            }
 
-        // Background
-        {
+            if (!loadingFinished && loadingTaskIndex >= loadingTasks.size()) {
+                loadingFinished = true;
+                loadingProgress = 1.0f;
+                if (!hasLoadingDone) {
+                    hasLoadingDone = ma_sound_init_from_file(&engine, "assets/sounds/ui/loading_done.wav", 0, nullptr, nullptr, &loadingDone) == MA_SUCCESS;
+                    if (hasLoadingDone) {
+                        ma_sound_start(&loadingDone);
+                    }
+                }
+                if (hasLoadingLoop) {
+                    ma_sound_stop(&loadingLoop);
+                    ma_sound_uninit(&loadingLoop);
+                    hasLoadingLoop = false;
+                }
+            }
+
+            if (loadingFinished) {
+                loadingFinishTimer += dt;
+                if (loadingFinishTimer >= loadingFinishHold && hasLoadingDone) {
+                    if (!hasAmbientLoop) {
+                        hasAmbientLoop = ma_sound_init_from_file(&engine, "assets/sounds/ambient/ambient_loop.wav", 0, nullptr, nullptr, &ambientLoop) == MA_SUCCESS;
+                        if (hasAmbientLoop) {
+                            ma_sound_set_looping(&ambientLoop, MA_TRUE);
+                            ma_sound_start(&ambientLoop);
+                        }
+                    }
+                    state = AppState::Menu;
+                }
+            }
+
             bgShader.use();
             bgShader.setInt("uTexture", 0);
+            bgShader.setFloat("uBlurAmount", 7.0f);
             bgTex.bind(0);
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::scale(model, glm::vec3(WINDOW_WIDTH, WINDOW_HEIGHT, 1.0f));
@@ -187,27 +267,59 @@ int main() {
             bgShader.setMat4("uProjection", glm::value_ptr(proj));
             glBindVertexArray(quadVAO);
             glDrawArrays(GL_TRIANGLES, 0, 6);
-        }
 
-        // Boy sprite (animated)
-        {
+            float lw = (float)logoTex.getWidth();
+            float lh = (float)logoTex.getHeight();
+            float scalePulse = 0.92f + std::sin(loadingPulse) * 0.025f;
+            float logoW = lw * scalePulse;
+            float logoH = lh * scalePulse;
+            renderSprite(quadVAO, spriteShader, logoTex, proj,
+                         (WINDOW_WIDTH - logoW) / 2.0f,
+                         WINDOW_HEIGHT * 0.22f,
+                         logoW, logoH, glm::vec4(1.0f));
+
+            float barX = (WINDOW_WIDTH - loadingBarWidth) / 2.0f;
+            float barY = WINDOW_HEIGHT * 0.72f;
+            renderSprite(quadVAO, spriteShader, *loadingBarTex, proj,
+                         barX, barY, loadingBarWidth, loadingBarHeight,
+                         glm::vec4(0.15f, 0.15f, 0.15f, 0.9f));
+            renderSprite(quadVAO, spriteShader, *loadingBarTex, proj,
+                         barX, barY, loadingBarWidth * loadingProgress, loadingBarHeight,
+                         glm::vec4(0.85f, 0.78f, 0.55f, 0.95f));
+
+            textRenderer.renderText("CARGANDO RECURSOS...", (WINDOW_WIDTH - 220.0f) / 2.0f, barY - 36.0f, 0.5f, glm::vec3(0.9f));
+        } else {
+            {
+                float normalizedY = (float)my / (float)WINDOW_HEIGHT;
+                if (normalizedY < 0.0f) normalizedY = 0.0f;
+                if (normalizedY > 1.0f) normalizedY = 1.0f;
+                currentFrame = (int)(normalizedY * (SPRITE_FRAMES - 1));
+            }
+
+            menu.update((float)mx, (float)my);
+
+            bgShader.use();
+            bgShader.setInt("uTexture", 0);
+            bgShader.setFloat("uBlurAmount", 0.0f);
+            bgTex.bind(0);
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::scale(model, glm::vec3(WINDOW_WIDTH, WINDOW_HEIGHT, 1.0f));
+            bgShader.setMat4("uModel", glm::value_ptr(model));
+            bgShader.setMat4("uProjection", glm::value_ptr(proj));
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+
             float sw = (float)spriteFrames[0]->getWidth();
             float sh = (float)spriteFrames[0]->getHeight();
             renderSprite(quadVAO, spriteShader, *spriteFrames[currentFrame], proj,
                          SPRITE_X, spriteY - sh / 2.0f, sw, sh, glm::vec4(1.0f));
-        }
 
-        // Logo
-        {
             float lw = (float)logoTex.getWidth();
             float lh = (float)logoTex.getHeight();
             float lx = (WINDOW_WIDTH - lw) / 2.0f;
             float ly = 30.0f;
             renderSprite(quadVAO, spriteShader, logoTex, proj, lx, ly, lw, lh, glm::vec4(1.0f));
-        }
 
-        // Menu text
-        {
             const auto& items = menu.getItems();
             for (size_t i = 0; i < items.size(); i++) {
                 glm::vec3 color = (items[i].hovered) ? glm::vec3(1.0f, 0.95f, 0.8f) : glm::vec3(0.9f, 0.9f, 0.9f);
@@ -221,15 +333,9 @@ int main() {
                                  glm::vec4(1.0f, 0.85f, 0.4f, 0.9f));
                 }
             }
-        }
 
-        // Version text (bottom-left)
-        {
             textRenderer.renderText("VERSI\u00d3N 0.9a (BUILD ALPHA)", 20.0f, WINDOW_HEIGHT - 30.0f, 0.35f, glm::vec3(0.6f));
-        }
 
-        // Credits text (bottom-right)
-        {
             std::string credits = "Hecho por Torres-Chavez-Torrez";
             glm::vec2 sz = textRenderer.getTextSize(credits, 0.35f);
             textRenderer.renderText(credits, WINDOW_WIDTH - sz.x - 20.0f, WINDOW_HEIGHT - 30.0f, 0.35f, glm::vec3(0.6f));
@@ -242,6 +348,11 @@ int main() {
     for (auto* t : spriteFrames) delete t;
     delete flashlightIcon;
     delete underlineTex;
+    delete loadingBarTex;
+    if (hasLoadingDone) ma_sound_uninit(&loadingDone);
+    if (hasLoadingLoop) ma_sound_uninit(&loadingLoop);
+    if (hasAmbientLoop) ma_sound_uninit(&ambientLoop);
+    ma_engine_uninit(&engine);
     glfwTerminate();
     return 0;
 }
