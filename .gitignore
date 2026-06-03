@@ -1,0 +1,14 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.sln.docstates
+
+# Build output
+bin/
+obj/
+out/
+Debug/
+Release/
+x64/
+x86/
