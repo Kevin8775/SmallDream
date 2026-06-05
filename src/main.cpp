@@ -19,6 +19,7 @@
 #include "TextRenderer.h"
 #include "Menu.h"
 #include "CubemapTexture.h"
+#include "VisualNovel.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -35,6 +36,8 @@ enum class AppState {
     Menu,
     CloudTransition,
     DreamLoading,
+    DreamBlack,
+    VisualNovel,
     DreamState
 };
 
@@ -301,6 +304,7 @@ int main() {
     }
 
     Texture* glowTex = createGlowTexture();
+    Texture* oficinaTex = new Texture("assets/textures/oficina.png");
 
     // Cloud transition animation
     float cloudAnimTimer = 0.0f;
@@ -320,6 +324,16 @@ int main() {
     bool hasLoadingDone = false;
     ma_sound ambientLoop;
     bool hasAmbientLoop = false;
+
+    // DreamBlack / VisualNovel
+    float dreamBlackTimer = 0.0f;
+    ma_sound tecladoSound;
+    bool hasTecladoSound = false;
+    bool tecladoPlayed = false;
+    bool prevMouseDown = false;
+
+    VisualNovel* visualNovel = new VisualNovel(&textRenderer, &spriteShader, quadVAO, proj, WINDOW_WIDTH, WINDOW_HEIGHT);
+    visualNovel->setBackground(oficinaTex);
 
     AppState state = AppState::Loading;
     gStatePtr = &state;
@@ -360,6 +374,10 @@ int main() {
 
         double mx, my;
         glfwGetCursorPos(gWindow, &mx, &my);
+
+        bool mouseDown = glfwGetMouseButton(gWindow, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+        bool mouseJustPressed = mouseDown && !prevMouseDown;
+        prevMouseDown = mouseDown;
 
         if (state == AppState::Loading) {
             loadingPulse += dt * 4.0f;
@@ -660,10 +678,34 @@ int main() {
                     textScale, glm::vec3(1.0f, 0.95f, 0.8f));
             }
 
-            // Transition to DreamState when bar is done
+            // Transition to DreamBlack when bar is done
             if (dreamLoadingTimer >= barEnd) {
-                state = AppState::DreamState;
+                state = AppState::DreamBlack;
+                dreamBlackTimer = 0.0f;
+                if (hasAmbientLoop) {
+                    ma_sound_stop(&ambientLoop);
+                }
             }
+        } else if (state == AppState::DreamBlack) {
+            // Black screen for 2 seconds, then play typing sound
+            if (dreamBlackTimer < 2.0f) {
+                dreamBlackTimer += dt;
+            } else if (!tecladoPlayed) {
+                // Init and play the teclado sound once
+                hasTecladoSound = ma_sound_init_from_file(&engine, "assets/sounds/ui/teclado.mp3", 0, nullptr, nullptr, &tecladoSound) == MA_SUCCESS;
+                if (hasTecladoSound) {
+                    ma_sound_start(&tecladoSound);
+                }
+                tecladoPlayed = true;
+            } else {
+                // Wait for sound to finish playing
+                if (!hasTecladoSound || !ma_sound_is_playing(&tecladoSound)) {
+                    state = AppState::VisualNovel;
+                }
+            }
+        } else if (state == AppState::VisualNovel) {
+            visualNovel->update(dt, mouseJustPressed);
+            visualNovel->render();
         } else if (state == AppState::DreamState) {
             // Render just the logo and a centered message
             float lw = (float)logoTex.getWidth();
@@ -684,13 +726,16 @@ int main() {
     delete skyboxTex;
     for (auto* t : cloudFrames) delete t;
     delete glowTex;
+    delete oficinaTex;
     for (auto* t : spriteFrames) delete t;
     delete flashlightIcon;
     delete underlineTex;
     delete loadingBarTex;
+    delete visualNovel;
     if (hasLoadingDone) ma_sound_uninit(&loadingDone);
     if (hasLoadingLoop) ma_sound_uninit(&loadingLoop);
     if (hasAmbientLoop) ma_sound_uninit(&ambientLoop);
+    if (hasTecladoSound) ma_sound_uninit(&tecladoSound);
     ma_engine_uninit(&engine);
     glfwTerminate();
     return 0;
