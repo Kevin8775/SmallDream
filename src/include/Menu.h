@@ -19,11 +19,14 @@ public:
     int getHoveredIndex() const { return mHoveredIndex; }
     const std::vector<MenuItem>& getItems() const { return mItems; }
     float getTextScale() const { return mTextScale; }
+    float getSlideOffset() const { return mSlideOffset; }
+    void setSlideOffset(float offset) { mSlideOffset = offset; }
 private:
     std::vector<MenuItem> mItems;
     TextRenderer* mTextRenderer;
     int mWindowWidth, mWindowHeight;
     int mHoveredIndex;
     float mTextScale;
+    float mSlideOffset = 0.0f;
     void recalcPositions();
 };
