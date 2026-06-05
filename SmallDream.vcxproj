@@ -43,6 +43,7 @@
     <ClCompile Include="src\CubemapTexture.cpp" />
     <ClCompile Include="src\TextRenderer.cpp" />
     <ClCompile Include="src\Menu.cpp" />
+    <ClCompile Include="src\VisualNovel.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\include\Shader.h" />
@@ -50,6 +51,7 @@
     <ClInclude Include="src\include\CubemapTexture.h" />
     <ClInclude Include="src\include\TextRenderer.h" />
     <ClInclude Include="src\include\Menu.h" />
+    <ClInclude Include="src\include\VisualNovel.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\shaders\background.vert" />
