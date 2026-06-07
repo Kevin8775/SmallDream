@@ -44,11 +44,13 @@ void Menu::recalcPositions() {
 
 void Menu::update(float mouseX, float mouseY) {
     mHoveredIndex = -1;
+    const float padX = 32.0f;
+    const float padY = 16.0f;
     for (size_t i = 0; i < mItems.size(); i++) {
         auto& item = mItems[i];
         item.hovered = false;
-        if (mouseX >= item.x && mouseX <= item.x + item.w &&
-            mouseY >= item.y && mouseY <= item.y + item.h) {
+        if (mouseX >= item.x - padX && mouseX <= item.x + item.w + padX &&
+            mouseY >= item.y - padY && mouseY <= item.y + item.h + padY) {
             item.hovered = true;
             mHoveredIndex = static_cast<int>(i);
         }

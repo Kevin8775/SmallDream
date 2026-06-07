@@ -21,7 +21,7 @@ public:
     TextRenderer(const char* fontPath, unsigned int fontSize, Shader* shader);
     ~TextRenderer();
 
-    void renderText(const std::string& text, float x, float y, float scale, const glm::vec3& color);
+    void renderText(const std::string& text, float x, float y, float scale, const glm::vec3& color, float alpha = 1.0f);
     glm::vec2 getTextSize(const std::string& text, float scale);
     void setProjection(const glm::mat4& proj) { mProjection = proj; }
 
