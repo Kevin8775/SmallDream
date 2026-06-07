@@ -40,14 +40,18 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Shader.cpp" />
     <ClCompile Include="src\Texture.cpp" />
+    <ClCompile Include="src\CubemapTexture.cpp" />
     <ClCompile Include="src\TextRenderer.cpp" />
     <ClCompile Include="src\Menu.cpp" />
+    <ClCompile Include="src\VisualNovel.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\include\Shader.h" />
     <ClInclude Include="src\include\Texture.h" />
+    <ClInclude Include="src\include\CubemapTexture.h" />
     <ClInclude Include="src\include\TextRenderer.h" />
     <ClInclude Include="src\include\Menu.h" />
+    <ClInclude Include="src\include\VisualNovel.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\shaders\background.vert" />
@@ -56,6 +60,8 @@
     <None Include="assets\shaders\sprite.frag" />
     <None Include="assets\shaders\text.vert" />
     <None Include="assets\shaders\text.frag" />
+    <None Include="assets\shaders\skybox.vert" />
+    <None Include="assets\shaders\skybox.frag" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
