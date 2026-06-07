@@ -100,10 +100,10 @@ TextRenderer::~TextRenderer() {
     if (mVBO) glDeleteBuffers(1, &mVBO);
 }
 
-void TextRenderer::renderText(const std::string& text, float x, float y, float scale, const glm::vec3& color) {
+void TextRenderer::renderText(const std::string& text, float x, float y, float scale, const glm::vec3& color, float alpha) {
     mShader->use();
     mShader->setMat4("uProjection", &mProjection[0][0]);
-    mShader->setVec3("uTextColor", color.r, color.g, color.b);
+    mShader->setVec4("uTextColor", color.r, color.g, color.b, alpha);
     glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(mVAO);
 

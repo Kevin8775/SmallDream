@@ -34,6 +34,7 @@ static const float SPRITE_X = 900.0f;
 enum class AppState {
     Loading,
     Menu,
+    Credits,
     CloudTransition,
     DreamLoading,
     DreamBlack,
@@ -52,16 +53,41 @@ struct CloudTile {
 static GLFWwindow* gWindow = nullptr;
 static Menu* gMenu = nullptr;
 static AppState* gStatePtr = nullptr;
+static bool gCreditsPaused = false;
+static double gCreditsPauseStarted = 0.0;
+static double gCreditsPauseAccum = 0.0;
 
 static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS && gStatePtr && *gStatePtr == AppState::Credits) {
+        double now = glfwGetTime();
+        if (!gCreditsPaused) {
+            gCreditsPaused = true;
+            gCreditsPauseStarted = now;
+        } else {
+            gCreditsPaused = false;
+            gCreditsPauseAccum += now - gCreditsPauseStarted;
+        }
+        return;
+    }
+
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
         if (gMenu && gStatePtr && *gStatePtr == AppState::Menu) {
             int hovered = gMenu->getHoveredIndex();
             if (hovered == 0) {
                 *gStatePtr = AppState::CloudTransition;
+            } else if (hovered == 3) {
+                *gStatePtr = AppState::Credits;
+                gCreditsPaused = false;
+                gCreditsPauseStarted = 0.0;
+                gCreditsPauseAccum = 0.0;
             } else if (hovered == 4) {
                 glfwSetWindowShouldClose(window, GLFW_TRUE);
             }
+        } else if (gStatePtr && *gStatePtr == AppState::Credits) {
+            gCreditsPaused = false;
+            gCreditsPauseStarted = 0.0;
+            gCreditsPauseAccum = 0.0;
+            *gStatePtr = AppState::Menu;
         }
     }
 }
@@ -211,8 +237,13 @@ static void renderSprite(GLuint vao, Shader& shader, Texture& tex, const glm::ma
 }
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        if (gStatePtr && *gStatePtr == AppState::Credits) {
+            *gStatePtr = AppState::Menu;
+            return;
+        }
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
 }
 
 int main() {
@@ -277,8 +308,10 @@ int main() {
     Texture* loadingBarTex = createWhiteTexture();
 
     TextRenderer textRenderer("assets/fonts/Roboto.ttf", 35, &textShader);
+    TextRenderer creditsTextRenderer("assets/fonts/Roboto.ttf", 60, &textShader);
     glm::mat4 proj = glm::ortho(0.0f, (float)WINDOW_WIDTH, (float)WINDOW_HEIGHT, 0.0f);
     textRenderer.setProjection(proj);
+    creditsTextRenderer.setProjection(proj);
 
     Menu menu;
     menu.init(&textRenderer, WINDOW_WIDTH, WINDOW_HEIGHT, TEXT_SCALE);
@@ -508,6 +541,120 @@ int main() {
             std::string credits = "Hecho por Torres-Chavez-Torrez";
             glm::vec2 sz = textRenderer.getTextSize(credits, 0.35f);
             textRenderer.renderText(credits, WINDOW_WIDTH - sz.x - 20.0f, WINDOW_HEIGHT - 30.0f, 0.35f, glm::vec3(0.6f));
+        } else if (state == AppState::Credits) {
+            double creditsNow = glfwGetTime();
+            double creditsElapsed = gCreditsPaused ? (gCreditsPauseStarted - gCreditsPauseAccum) : (creditsNow - gCreditsPauseAccum);
+            float creditsAnim = std::min((float)creditsElapsed * 0.75f, 1.0f);
+            float creditsRise = (1.0f - creditsAnim) * 120.0f;
+            float creditsAlpha = creditsAnim * creditsAnim;
+            float creditsFloat = std::sin((float)creditsElapsed * 0.9f) * 4.0f;
+
+            bgShader.use();
+            bgShader.setInt("uTexture", 0);
+            bgShader.setFloat("uBlurAmount", 3.5f);
+            bgTex.bind(0);
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::scale(model, glm::vec3(WINDOW_WIDTH, WINDOW_HEIGHT, 1.0f));
+            bgShader.setMat4("uModel", glm::value_ptr(model));
+            bgShader.setMat4("uProjection", glm::value_ptr(proj));
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+
+            float lw = (float)logoTex.getWidth();
+            float lh = (float)logoTex.getHeight();
+            float logoScale = 0.36f;
+            renderSprite(quadVAO, spriteShader, logoTex, proj,
+                         (WINDOW_WIDTH - lw * logoScale) / 2.0f,
+                         28.0f,
+                         lw * logoScale,
+                         lh * logoScale,
+                         glm::vec4(1.0f));
+
+            const float centerX = WINDOW_WIDTH * 0.5f;
+            const float lineGap = 64.0f;
+            const float scrollSpeed = 40.0f;
+            const float scrollSpan = 1120.0f;
+            const float scrollOffset = std::fmod((float)creditsElapsed * scrollSpeed, scrollSpan);
+            const float textCenterY = 220.0f + creditsRise + creditsFloat;
+
+            float panelW = 680.0f;
+            float panelH = 430.0f;
+            float panelX = (WINDOW_WIDTH - panelW) / 2.0f;
+            float panelY = 184.0f + creditsRise;
+            renderSprite(quadVAO, spriteShader, *glowTex, proj,
+                         panelX, panelY, panelW, panelH,
+                         glm::vec4(0.16f, 0.14f, 0.12f, 0.65f * creditsAlpha));
+
+            renderSprite(quadVAO, spriteShader, *glowTex, proj,
+                         panelX + 10.0f, panelY + 10.0f, panelW - 20.0f, panelH - 20.0f,
+                         glm::vec4(0.08f, 0.08f, 0.10f, 0.45f * creditsAlpha));
+
+            auto drawCentered = [&](const std::string& text, float y, float scale, const glm::vec3& color, float delay = 0.0f) {
+                glm::vec2 size = creditsTextRenderer.getTextSize(text, scale);
+                float a = std::max(0.0f, std::min(1.0f, creditsAlpha - delay));
+                if (y < 96.0f || y > WINDOW_HEIGHT - 40.0f) {
+                    a *= 0.0f;
+                } else if (y < 160.0f) {
+                    a *= (y - 96.0f) / 64.0f;
+                }
+                creditsTextRenderer.renderText(text, centerX - size.x * 0.5f, y, scale, color, a);
+            };
+
+            auto drawRoleBlock = [&](const std::string& role, const std::string& name, float y, float roleDelay, float nameDelay) {
+                drawCentered(role, y, 0.42f, glm::vec3(0.74f, 0.80f, 0.88f), roleDelay);
+                drawCentered(name, y + 24.0f, 0.58f, glm::vec3(0.92f, 0.92f, 0.90f), nameDelay);
+            };
+
+            struct CreditLine {
+                std::string text;
+                float scale;
+                glm::vec3 color;
+                float delay;
+            };
+
+            std::vector<CreditLine> lines = {
+                {"CREDITS", 1.18f, glm::vec3(0.97f, 0.92f, 0.79f), 0.00f},
+                {"SmallDream", 0.68f, glm::vec3(0.78f, 0.84f, 0.92f), 0.04f},
+                {"Team", 0.82f, glm::vec3(0.92f, 0.90f, 0.85f), 0.08f},          
+                {"Torres Guadamuz Miguel Angel", 0.58f, glm::vec3(0.92f, 0.92f, 0.90f), 0.15f},
+                {"Torrez Urbina Kevin Gael", 0.58f, glm::vec3(0.92f, 0.92f, 0.90f), 0.21f},        
+                {"Ch\u00e1vez Martinez Kevin Fernando", 0.58f, glm::vec3(0.92f, 0.92f, 0.90f), 0.27f},
+                {"Program", 0.82f, glm::vec3(0.92f, 0.90f, 0.85f), 0.30f},
+                {"National University of Engineering (UNI)", 0.58f, glm::vec3(0.84f), 0.33f},
+                {"Computer Engineering", 0.58f, glm::vec3(0.84f), 0.36f},
+                {"Graphic Programming course project", 0.54f, glm::vec3(0.80f), 0.39f},
+                {"Thank you for playing", 0.50f, glm::vec3(0.80f, 0.76f, 0.66f), 0.42f}
+            };
+
+            float startY = WINDOW_HEIGHT + 140.0f;
+            float baseY = startY - scrollOffset;
+            float cursorY = baseY;
+
+            for (const auto& line : lines) {
+                glm::vec2 size = creditsTextRenderer.getTextSize(line.text, line.scale);
+                float x = centerX - size.x * 0.5f;
+                float a = std::max(0.0f, std::min(1.0f, creditsAlpha - line.delay));
+                if (cursorY < 96.0f || cursorY > WINDOW_HEIGHT - 40.0f) {
+                    a = 0.0f;
+                } else if (cursorY < 160.0f) {
+                    a *= (cursorY - 96.0f) / 64.0f;
+                }
+                creditsTextRenderer.renderText(line.text, x, cursorY, line.scale, line.color, a);
+                cursorY += lineGap;
+            }
+
+            renderSprite(quadVAO, spriteShader, *glowTex, proj,
+                         centerX - 170.0f, 702.0f, 340.0f, 3.0f,
+                         glm::vec4(0.95f, 0.82f, 0.55f, 0.9f * creditsAlpha));
+
+            float backW = 320.0f;
+            float backH = 54.0f;
+            float backX = 24.0f;
+            float backY = WINDOW_HEIGHT - backH - 24.0f;
+            renderSprite(quadVAO, spriteShader, *glowTex, proj,
+                         backX, backY, backW, backH,
+                         glm::vec4(0.20f, 0.17f, 0.14f, 0.55f * creditsAlpha));
+            creditsTextRenderer.renderText("Click or press ESC to go back", backX + 18.0f, backY + 13.0f, 0.40f, glm::vec3(0.92f, 0.88f, 0.80f), creditsAlpha);
         } else if (state == AppState::CloudTransition) {
             // Generate mosaic tiles on first frame
             if (!cloudTilesGenerated) {
