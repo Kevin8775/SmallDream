@@ -73,6 +73,22 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     addLine("> Solo quer\u00eda llegar a casa.");
     addLine("> Nada m\u00e1s.");
 
+    // Scene 2: Calle
+    mScenes.push_back({});
+    mScenes.back().bgPath = "assets/textures/calle.png";
+    addLine("*Las farolas iluminan la acera con una luz c\u00e1lida.*");
+    addLine("*La ciudad parece m\u00e1s tranquila de lo habitual.*");
+    addLine("> Qu\u00e9 silencio...");
+    addLine("*Contin\u00fao caminando.*");
+    addLine("*El sonido de mis pasos resuena en la calle vac\u00eda.*");
+    addLine("> Supongo que ya es bastante tarde.");
+    addLine("*Levanto la vista hacia el cielo nocturno.*");
+    addLine("> No recuerdo la \u00faltima vez que sal\u00ed tan tarde.");
+    addLine("*Una brisa fr\u00eda recorre la calle.*");
+    addLine("> Solo quiero llegar a casa.");
+    addLine("> Descansar un poco.");
+    addLine("*La silueta de mi casa aparece al final de la calle.*");
+
     mBackground = new Texture(mScenes[0].bgPath);
 }
 
