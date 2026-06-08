@@ -37,6 +37,7 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     , mTransitionDuration(TRANSITION_DURATION)
     , mSoundEngine(nullptr)
     , mCurrentSound(nullptr)
+    , mAmbientSound(nullptr)
     , mWaitingForSound(false)
 {
     mDialogBox = new Texture("assets/textures/caja_dialogo.png");
@@ -76,11 +77,12 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     // Scene 2: Calle
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/calle.png";
+    mScenes.back().ambientSound = "assets/sounds/ui/viento.mp3";
     addLine("*Las farolas iluminan la acera con una luz c\u00e1lida.*");
     addLine("*La ciudad parece m\u00e1s tranquila de lo habitual.*");
     addLine("> Qu\u00e9 silencio...");
-    addLine("*Contin\u00fao caminando.*");
-    addLine("*El sonido de mis pasos resuena en la calle vac\u00eda.*");
+    addLine("*Contin\u00fao caminando.*", "assets/sounds/ui/pasos_2.mp3");
+    addLine("*El sonido de mis pasos resuena en la calle vac\u00eda.*", "assets/sounds/ui/pasos_2.mp3");
     addLine("> Supongo que ya es bastante tarde.");
     addLine("*Levanto la vista hacia el cielo nocturno.*");
     addLine("> No recuerdo la \u00faltima vez que sal\u00ed tan tarde.");
@@ -93,6 +95,7 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
 }
 
 VisualNovel::~VisualNovel() {
+    stopAmbient();
     stopCurrentSound();
     delete mBackground;
     delete mNextBg;
@@ -133,7 +136,33 @@ void VisualNovel::stopCurrentSound() {
     mWaitingForSound = false;
 }
 
+void VisualNovel::startAmbient() {
+    const auto& scene = mScenes[mCurrentScene];
+    if (!mSoundEngine || scene.ambientSound.empty()) return;
+    stopAmbient();
+    mAmbientSound = new ma_sound();
+    if (ma_sound_init_from_file(mSoundEngine, scene.ambientSound.c_str(), 0, nullptr, nullptr, mAmbientSound) == MA_SUCCESS) {
+        ma_sound_set_looping(mAmbientSound, MA_TRUE);
+        ma_sound_start(mAmbientSound);
+    } else {
+        delete mAmbientSound;
+        mAmbientSound = nullptr;
+    }
+}
+
+void VisualNovel::stopAmbient() {
+    if (mAmbientSound) {
+        if (ma_sound_is_playing(mAmbientSound)) {
+            ma_sound_stop(mAmbientSound);
+        }
+        ma_sound_uninit(mAmbientSound);
+        delete mAmbientSound;
+        mAmbientSound = nullptr;
+    }
+}
+
 void VisualNovel::reset() {
+    stopAmbient();
     stopCurrentSound();
     delete mBackground;
     delete mNextBg;
@@ -173,6 +202,9 @@ void VisualNovel::update(float dt, bool mouseJustPressed) {
             mPrevBg = nullptr;
             mBackground = mNextBg;
             mNextBg = nullptr;
+            if (!mScenes[mCurrentScene].ambientSound.empty()) {
+                startAmbient();
+            }
         }
         return;
     }
@@ -211,6 +243,7 @@ void VisualNovel::advanceLine() {
     if (mCurrentLine >= (int)mScenes[mCurrentScene].lines.size()) {
         int nextScene = mCurrentScene + 1;
         if (nextScene < (int)mScenes.size()) {
+            stopAmbient();
             mPrevBg = mBackground;
             mNextBg = new Texture(mScenes[nextScene].bgPath);
             mBackground = nullptr;
@@ -223,6 +256,7 @@ void VisualNovel::advanceLine() {
             mLineFinished = false;
             return;
         }
+        stopAmbient();
         mAllDone = true;
         return;
     }
