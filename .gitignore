@@ -12,3 +12,7 @@ Debug/
 Release/
 x64/
 x86/
+
+# vcpkg
+vcpkg_installed/
+*.nupkg

@@ -369,7 +369,6 @@ int main() {
     }
 
     Texture* glowTex = createGlowTexture();
-    Texture* oficinaTex = new Texture("assets/textures/oficina.png");
     Shader modelShader("assets/shaders/model.vert", "assets/shaders/model.frag");
     Model houseModel;
     bool houseLoaded = false;
@@ -428,7 +427,7 @@ int main() {
     bool prevMouseDown = false;
 
     VisualNovel* visualNovel = new VisualNovel(&textRenderer, &spriteShader, quadVAO, proj, WINDOW_WIDTH, WINDOW_HEIGHT);
-    visualNovel->setBackground(oficinaTex);
+    visualNovel->setSoundEngine(&engine);
 
     AppState state = AppState::Loading;
     gStatePtr = &state;
@@ -616,7 +615,7 @@ int main() {
             float viewY = WINDOW_HEIGHT * 0.58f;
 
             textRenderer.renderText("Choose how to start",
-                (WINDOW_WIDTH - 360.0f) / 2.0f, 120.0f,
+                (WINDOW_WIDTH - 360.0f) / 2.0f + 60.0f, 120.0f,
                 0.72f, glm::vec3(0.96f, 0.92f, 0.80f));
 
             renderSprite(quadVAO, spriteShader, *underlineTex, proj,
@@ -633,11 +632,15 @@ int main() {
                          btnX + 6.0f, viewY + 6.0f, btnW - 12.0f, btnH - 12.0f,
                          glm::vec4(0.04f, 0.04f, 0.05f, 0.22f));
 
+            glm::vec2 skipSz = textRenderer.getTextSize("Saltar Historia", 0.82f);
+            glm::vec2 viewSz = textRenderer.getTextSize("Ver Historia", 0.82f);
             textRenderer.renderText("Saltar Historia",
-                btnX + 120.0f, skipY + 48.0f,
+                btnX + (btnW - skipSz.x) / 2.0f,
+                skipY + (btnH - skipSz.y) / 2.0f - 18.0f,
                 0.82f, glm::vec3(0.98f, 0.94f, 0.86f));
             textRenderer.renderText("Ver Historia",
-                btnX + 145.0f, viewY + 48.0f,
+                btnX + (btnW - viewSz.x) / 2.0f,
+                viewY + (btnH - viewSz.y) / 2.0f - 18.0f,
                 0.82f, glm::vec3(0.98f, 0.94f, 0.86f));
         } else if (state == AppState::Credits) {
             double creditsNow = glfwGetTime();
@@ -1071,12 +1074,19 @@ int main() {
             } else {
                 // Wait for sound to finish playing
                 if (!hasTecladoSound || !ma_sound_is_playing(&tecladoSound)) {
+                    visualNovel->reset();
                     state = AppState::VisualNovel;
                 }
             }
         } else if (state == AppState::VisualNovel) {
             visualNovel->update(dt, mouseJustPressed);
             visualNovel->render();
+            if (visualNovel->isFinished()) {
+                state = AppState::Menu;
+                gCreditsPaused = false;
+                gCreditsPauseStarted = 0.0;
+                gCreditsPauseAccum = 0.0;
+            }
         } else if (state == AppState::DreamState) {
             // Render just the logo and a centered message
             float lw = (float)logoTex.getWidth();
@@ -1097,7 +1107,6 @@ int main() {
     delete skyboxTex;
     for (auto* t : cloudFrames) delete t;
     delete glowTex;
-    delete oficinaTex;
     for (auto* t : spriteFrames) delete t;
     delete flashlightIcon;
     delete underlineTex;

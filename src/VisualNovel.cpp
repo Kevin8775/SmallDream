@@ -3,12 +3,14 @@
 #include "TextRenderer.h"
 #include "Shader.h"
 #include <glm/gtc/type_ptr.hpp>
+#include <miniaudio.h>
 
 static const float CHAR_INTERVAL = 0.05f;
 static const float TEXT_PADDING_X = 40.0f;
 static const float TEXT_PADDING_Y = 20.0f;
 static const float BOX_BOTTOM_MARGIN = 10.0f;
 static const float DIALOG_TEXT_SCALE = 0.55f;
+static const float TRANSITION_DURATION = 1.0f;
 
 VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
                          GLuint quadVAO, const glm::mat4& proj,
@@ -27,36 +29,108 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     , mLineFinished(false)
     , mAllDone(false)
     , mBackground(nullptr)
+    , mNextBg(nullptr)
+    , mPrevBg(nullptr)
     , mDialogBox(nullptr)
+    , mTransitioning(false)
+    , mTransitionTimer(0.0f)
+    , mTransitionDuration(TRANSITION_DURATION)
+    , mSoundEngine(nullptr)
+    , mCurrentSound(nullptr)
+    , mWaitingForSound(false)
 {
     mDialogBox = new Texture("assets/textures/caja_dialogo.png");
     calcLayout();
 
-    Scene scene;
-    scene.lines.push_back("Otro d\u00eda frente a la misma pantalla.");
-    scene.lines.push_back("Las mismas teclas.");
-    scene.lines.push_back("Los mismos pasillos.");
-    scene.lines.push_back("Las mismas luces que nunca parec\u00edan apagarse.");
-    scene.lines.push_back("Mir\u00e9 el reloj.");
-    scene.lines.push_back("22:47.");
-    scene.lines.push_back("Ya era tarde.");
-    scene.lines.push_back("Guard\u00e9 los \u00faltimos archivos.");
-    scene.lines.push_back("Apagu\u00e9 la pantalla.");
-    scene.lines.push_back("Y por fin me levant\u00e9.");
-    mScenes.push_back(scene);
+    auto addLine = [&](const std::string& text, const std::string& sound = "", bool wait = false) {
+        mScenes.back().lines.push_back({text, sound, wait});
+    };
+
+    // Scene 0: Oficina
+    mScenes.push_back({});
+    mScenes.back().bgPath = "assets/textures/oficina.png";
+    addLine("Otro d\u00eda frente a la misma pantalla.");
+    addLine("Las mismas teclas.");
+    addLine("Los mismos pasillos.");
+    addLine("Las mismas luces que nunca parec\u00edan apagarse.");
+    addLine("Mir\u00e9 el reloj.");
+    addLine("22:47.");
+    addLine("Ya era tarde.");
+    addLine("Guard\u00e9 los \u00faltimos archivos.");
+    addLine("Apagu\u00e9 la pantalla.");
+    addLine("Y por fin me levant\u00e9.");
+    addLine("*Empujo la silla hacia atr\u00e1s.*", "assets/sounds/ui/arrastrar_silla.mp3", true);
+    addLine("*Recojo mi mochila.*", "assets/sounds/ui/pasos.mp3", true);
+    addLine("...y me voy a mi casa.");
+
+    // Scene 1: Empresa (exterior)
+    mScenes.push_back({});
+    mScenes.back().bgPath = "assets/textures/empresa.png";
+    addLine("*Las puertas de vidrio se abren lentamente.*");
+    addLine("*Una corriente de aire fresco golpea mi rostro.*");
+    addLine("> Mucho mejor.");
+    addLine("*Comienzo a caminar por la calle.*");
+    addLine("> Solo quer\u00eda llegar a casa.");
+    addLine("> Nada m\u00e1s.");
+
+    mBackground = new Texture(mScenes[0].bgPath);
 }
 
 VisualNovel::~VisualNovel() {
+    stopCurrentSound();
+    delete mBackground;
+    delete mNextBg;
     delete mDialogBox;
 }
 
+void VisualNovel::setSoundEngine(ma_engine* engine) {
+    mSoundEngine = engine;
+}
+
+void VisualNovel::playCurrentLineSound() {
+    const auto& line = mScenes[mCurrentScene].lines[mCurrentLine];
+    if (!mSoundEngine || line.soundPath.empty()) return;
+
+    stopCurrentSound();
+
+    mCurrentSound = new ma_sound();
+    if (ma_sound_init_from_file(mSoundEngine, line.soundPath.c_str(), 0, nullptr, nullptr, mCurrentSound) == MA_SUCCESS) {
+        ma_sound_start(mCurrentSound);
+        if (line.waitForSound) {
+            mWaitingForSound = true;
+        }
+    } else {
+        delete mCurrentSound;
+        mCurrentSound = nullptr;
+    }
+}
+
+void VisualNovel::stopCurrentSound() {
+    if (mCurrentSound) {
+        if (ma_sound_is_playing(mCurrentSound)) {
+            ma_sound_stop(mCurrentSound);
+        }
+        ma_sound_uninit(mCurrentSound);
+        delete mCurrentSound;
+        mCurrentSound = nullptr;
+    }
+    mWaitingForSound = false;
+}
+
 void VisualNovel::reset() {
+    stopCurrentSound();
+    delete mBackground;
+    delete mNextBg;
+    mBackground = new Texture(mScenes[0].bgPath);
+    mNextBg = nullptr;
+    mPrevBg = nullptr;
     mCurrentScene = 0;
     mCurrentLine = 0;
     mCharIndex = 0;
     mCharTimer = 0.0f;
     mLineFinished = false;
     mAllDone = false;
+    mTransitioning = false;
 }
 
 void VisualNovel::calcLayout() {
@@ -74,23 +148,65 @@ void VisualNovel::calcLayout() {
 void VisualNovel::update(float dt, bool mouseJustPressed) {
     if (mAllDone) return;
 
+    if (mTransitioning) {
+        mTransitionTimer += dt;
+        float progress = std::min(mTransitionTimer / mTransitionDuration, 1.0f);
+        if (progress >= 1.0f) {
+            mTransitioning = false;
+            delete mPrevBg;
+            mPrevBg = nullptr;
+            mBackground = mNextBg;
+            mNextBg = nullptr;
+        }
+        return;
+    }
+
     if (!mLineFinished) {
         mCharTimer += dt;
-        while (mCharTimer >= mCharInterval && mCharIndex < (int)mScenes[mCurrentScene].lines[mCurrentLine].size()) {
+        while (mCharTimer >= mCharInterval && mCharIndex < (int)mScenes[mCurrentScene].lines[mCurrentLine].text.size()) {
             mCharTimer -= mCharInterval;
             mCharIndex++;
         }
-        if (mCharIndex >= (int)mScenes[mCurrentScene].lines[mCurrentLine].size()) {
+        if (mCharIndex >= (int)mScenes[mCurrentScene].lines[mCurrentLine].text.size()) {
             mLineFinished = true;
+            const auto& line = mScenes[mCurrentScene].lines[mCurrentLine];
+            if (!line.soundPath.empty()) {
+                playCurrentLineSound();
+            }
         }
-    } else if (mouseJustPressed) {
+    }
+
+    if (mWaitingForSound) {
+        if (mCurrentSound && !ma_sound_is_playing(mCurrentSound)) {
+            mWaitingForSound = false;
+            advanceLine();
+        }
+        return;
+    }
+
+    if (mLineFinished && mouseJustPressed) {
         advanceLine();
     }
 }
 
 void VisualNovel::advanceLine() {
+    stopCurrentSound();
     mCurrentLine++;
     if (mCurrentLine >= (int)mScenes[mCurrentScene].lines.size()) {
+        int nextScene = mCurrentScene + 1;
+        if (nextScene < (int)mScenes.size()) {
+            mPrevBg = mBackground;
+            mNextBg = new Texture(mScenes[nextScene].bgPath);
+            mBackground = nullptr;
+            mTransitioning = true;
+            mTransitionTimer = 0.0f;
+            mCurrentScene = nextScene;
+            mCurrentLine = 0;
+            mCharIndex = 0;
+            mCharTimer = 0.0f;
+            mLineFinished = false;
+            return;
+        }
         mAllDone = true;
         return;
     }
@@ -99,20 +215,36 @@ void VisualNovel::advanceLine() {
     mLineFinished = false;
 }
 
+static void renderBg(Shader& shader, GLuint vao, const glm::mat4& proj,
+                     Texture& tex, float alpha, int w, int h) {
+    shader.use();
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::scale(model, glm::vec3((float)w, (float)h, 1.0f));
+    shader.setMat4("uModel", glm::value_ptr(model));
+    shader.setMat4("uProjection", glm::value_ptr(proj));
+    shader.setVec4("uColor", 1.0f, 1.0f, 1.0f, alpha);
+    shader.setInt("uTexture", 0);
+    tex.bind(0);
+    glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
 void VisualNovel::render() {
     if (mAllDone) return;
 
+    if (mTransitioning) {
+        float progress = std::min(mTransitionTimer / mTransitionDuration, 1.0f);
+        if (mPrevBg) {
+            renderBg(*mSpriteShader, mQuadVAO, mProj, *mPrevBg, 1.0f, mWindowWidth, mWindowHeight);
+        }
+        if (mNextBg) {
+            renderBg(*mSpriteShader, mQuadVAO, mProj, *mNextBg, progress, mWindowWidth, mWindowHeight);
+        }
+        return;
+    }
+
     if (mBackground) {
-        mSpriteShader->use();
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::scale(model, glm::vec3((float)mWindowWidth, (float)mWindowHeight, 1.0f));
-        mSpriteShader->setMat4("uModel", glm::value_ptr(model));
-        mSpriteShader->setMat4("uProjection", glm::value_ptr(mProj));
-        mSpriteShader->setVec4("uColor", 1.0f, 1.0f, 1.0f, 1.0f);
-        mSpriteShader->setInt("uTexture", 0);
-        mBackground->bind(0);
-        glBindVertexArray(mQuadVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        renderBg(*mSpriteShader, mQuadVAO, mProj, *mBackground, 1.0f, mWindowWidth, mWindowHeight);
     }
 
     mSpriteShader->use();
@@ -127,12 +259,13 @@ void VisualNovel::render() {
     glBindVertexArray(mQuadVAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    const std::string& line = mScenes[mCurrentScene].lines[mCurrentLine];
-    std::string visible = line.substr(0, mCharIndex);
+    const auto& line = mScenes[mCurrentScene].lines[mCurrentLine];
+    std::string visible = line.text.substr(0, mCharIndex);
     mTextRenderer->renderText(visible, mTextX, mTextY, DIALOG_TEXT_SCALE, glm::vec3(1.0f, 1.0f, 1.0f));
 }
 
 void VisualNovel::setBackground(Texture* bg) {
+    delete mBackground;
     mBackground = bg;
 }
 
