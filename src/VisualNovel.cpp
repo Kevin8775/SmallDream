@@ -69,10 +69,10 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     mScenes.back().bgPath = "assets/textures/empresa.png";
     addLine("*Las puertas de vidrio se abren lentamente.*");
     addLine("*Una corriente de aire fresco golpea mi rostro.*");
-    addLine("> Mucho mejor.");
+    addLine("Mucho mejor.");
     addLine("*Comienzo a caminar por la calle.*");
-    addLine("> Solo quer\u00eda llegar a casa.");
-    addLine("> Nada m\u00e1s.");
+    addLine("Solo quer\u00eda llegar a casa.");
+    addLine("Nada m\u00e1s.");
 
     // Scene 2: Calle
     mScenes.push_back({});
@@ -80,16 +80,47 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     mScenes.back().ambientSound = "assets/sounds/ui/viento.mp3";
     addLine("*Las farolas iluminan la acera con una luz c\u00e1lida.*");
     addLine("*La ciudad parece m\u00e1s tranquila de lo habitual.*");
-    addLine("> Qu\u00e9 silencio...");
+    addLine("Qu\u00e9 silencio...");
     addLine("*Contin\u00fao caminando.*", "assets/sounds/ui/pasos_2.mp3");
     addLine("*El sonido de mis pasos resuena en la calle vac\u00eda.*", "assets/sounds/ui/pasos_2.mp3");
-    addLine("> Supongo que ya es bastante tarde.");
+    addLine("Supongo que ya es bastante tarde.");
     addLine("*Levanto la vista hacia el cielo nocturno.*");
-    addLine("> No recuerdo la \u00faltima vez que sal\u00ed tan tarde.");
+    addLine("No recuerdo la \u00faltima vez que sal\u00ed tan tarde.");
     addLine("*Una brisa fr\u00eda recorre la calle.*");
-    addLine("> Solo quiero llegar a casa.");
-    addLine("> Descansar un poco.");
+    addLine("Solo quiero llegar a casa.");
+    addLine("Descansar un poco.");
     addLine("*La silueta de mi casa aparece al final de la calle.*");
+
+    // Scene 3: Casa
+    mScenes.push_back({});
+    mScenes.back().bgPath = "assets/textures/casa.png";
+    addLine("*Abro la puerta y entro en casa.*");
+    addLine("*El silencio me recibe al instante.*");
+    addLine("*Dejo las llaves sobre la mesa.*");
+    addLine("*La l\u00e1mpara de la sala ilumina suavemente la habitaci\u00f3n.*");
+    addLine("Hogar.");
+    addLine("*Dejo la mochila en el suelo.*");
+    addLine("*Mis hombros se sienten m\u00e1s ligeros.*");
+    addLine("Por fin.");
+    addLine("*Observo la sala durante unos segundos.*");
+    addLine("Nunca pens\u00e9 que un lugar tan simple pudiera sentirse tan bien.");
+    addLine("*Camino lentamente hacia el sill\u00f3n.*");
+    addLine("Solo necesito descansar un poco.");
+
+    // Scene 4: Casa por dentro (sill\u00f3n)
+    mScenes.push_back({});
+    mScenes.back().bgPath = "assets/textures/casa_por_dentro.png";
+    addLine("*Me dejo caer sobre el sill\u00f3n.*");
+    addLine("*El cansancio del d\u00eda parece alcanzarme de golpe.*");
+    addLine("Ah...");
+    addLine("*Apoyo la cabeza.*");
+    addLine("*Cierro los ojos por un momento.*");
+    addLine("Solo unos minutos.");
+    addLine("Despu\u00e9s me levantar\u00e9.");
+    addLine("*Respiro profundamente.*");
+    addLine("Eso pensaba siempre.");
+    addLine("*El silencio llena la habitaci\u00f3n.*");
+    addLine("*Poco a poco todo comienza a desvanecerse.*");
 
     mBackground = new Texture(mScenes[0].bgPath);
 }
