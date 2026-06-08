@@ -39,6 +39,9 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     , mCurrentSound(nullptr)
     , mAmbientSound(nullptr)
     , mWaitingForSound(false)
+    , mEndTimer(0.0f)
+    , mEndDelay(3.0f)
+    , mEndTimerActive(false)
 {
     mDialogBox = new Texture("assets/textures/caja_dialogo.png");
     calcLayout();
@@ -61,16 +64,16 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     addLine("Apagu\u00e9 la pantalla.");
     addLine("Y por fin me levant\u00e9.");
     addLine("*Empujo la silla hacia atr\u00e1s.*", "assets/sounds/ui/arrastrar_silla.mp3", true);
-    addLine("*Recojo mi mochila.*", "assets/sounds/ui/pasos.mp3", true);
+    addLine("*Recojo mi mochila.*", "assets/sounds/ui/mochila.mp3", true);
     addLine("...y me voy a mi casa.");
 
     // Scene 1: Empresa (exterior)
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/empresa.png";
-    addLine("*Las puertas de vidrio se abren lentamente.*");
+    addLine("*Las puertas de vidrio se abren lentamente.*", "assets/sounds/ui/puerta_vidrio.mp3");
     addLine("*Una corriente de aire fresco golpea mi rostro.*");
     addLine("Mucho mejor.");
-    addLine("*Comienzo a caminar por la calle.*");
+    addLine("*Comienzo a caminar por la calle.*", "assets/sounds/ui/pasos_2.mp3");
     addLine("Solo quer\u00eda llegar a casa.");
     addLine("Nada m\u00e1s.");
 
@@ -94,12 +97,12 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     // Scene 3: Casa
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa.png";
-    addLine("*Abro la puerta y entro en casa.*");
+    addLine("*Abro la puerta y entro en casa.*", "assets/sounds/ui/puerta_casa.mp3", true);
     addLine("*El silencio me recibe al instante.*");
-    addLine("*Dejo las llaves sobre la mesa.*");
+    addLine("*Dejo las llaves sobre la mesa.*", "assets/sounds/ui/llaves.mp3", true);
     addLine("*La l\u00e1mpara de la sala ilumina suavemente la habitaci\u00f3n.*");
     addLine("Hogar.");
-    addLine("*Dejo la mochila en el suelo.*");
+    addLine("*Dejo la mochila en el suelo.*", "assets/sounds/ui/mochila.mp3", true);
     addLine("*Mis hombros se sienten m\u00e1s ligeros.*");
     addLine("Por fin.");
     addLine("*Observo la sala durante unos segundos.*");
@@ -121,6 +124,23 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     addLine("Eso pensaba siempre.");
     addLine("*El silencio llena la habitaci\u00f3n.*");
     addLine("*Poco a poco todo comienza a desvanecerse.*");
+
+    // Scene 5: Casa oscura/borrosa
+    mScenes.push_back({});
+    mScenes.back().bgPath = "assets/textures/casa_oscura.png";
+    addLine("...");
+    addLine("...");
+    addLine("*La habitaci\u00f3n parece extra\u00f1amente silenciosa.*");
+    addLine("...");
+    addLine("*Por un instante, todo se siente distante.*");
+    addLine("...");
+
+    // Scene 6: Negro
+    mScenes.push_back({});
+    mScenes.back().bgPath = "assets/textures/negro.png";
+    addLine("...");
+    addLine("...");
+    addLine("\u00bf...?");
 
     mBackground = new Texture(mScenes[0].bgPath);
 }
@@ -207,6 +227,8 @@ void VisualNovel::reset() {
     mLineFinished = false;
     mAllDone = false;
     mTransitioning = false;
+    mEndTimerActive = false;
+    mEndTimer = 0.0f;
 }
 
 void VisualNovel::calcLayout() {
@@ -223,6 +245,15 @@ void VisualNovel::calcLayout() {
 
 void VisualNovel::update(float dt, bool mouseJustPressed) {
     if (mAllDone) return;
+
+    if (mEndTimerActive) {
+        mEndTimer += dt;
+        if (mEndTimer >= mEndDelay) {
+            mEndTimerActive = false;
+            mAllDone = true;
+        }
+        return;
+    }
 
     if (mTransitioning) {
         mTransitionTimer += dt;
@@ -288,7 +319,8 @@ void VisualNovel::advanceLine() {
             return;
         }
         stopAmbient();
-        mAllDone = true;
+        mEndTimerActive = true;
+        mEndTimer = 0.0f;
         return;
     }
     mCharIndex = 0;
@@ -312,6 +344,13 @@ static void renderBg(Shader& shader, GLuint vao, const glm::mat4& proj,
 
 void VisualNovel::render() {
     if (mAllDone) return;
+
+    if (mEndTimerActive) {
+        if (mBackground) {
+            renderBg(*mSpriteShader, mQuadVAO, mProj, *mBackground, 1.0f, mWindowWidth, mWindowHeight);
+        }
+        return;
+    }
 
     if (mTransitioning) {
         float progress = std::min(mTransitionTimer / mTransitionDuration, 1.0f);
