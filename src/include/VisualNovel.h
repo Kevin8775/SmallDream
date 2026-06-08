@@ -75,4 +75,8 @@ private:
     ma_sound* mCurrentSound;
     ma_sound* mAmbientSound;
     bool mWaitingForSound;
+
+    float mEndTimer;
+    float mEndDelay;
+    bool mEndTimerActive;
 };
