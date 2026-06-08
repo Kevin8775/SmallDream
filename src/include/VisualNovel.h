@@ -30,6 +30,8 @@ private:
     void calcLayout();
     void playCurrentLineSound();
     void stopCurrentSound();
+    void startAmbient();
+    void stopAmbient();
 
     struct LineInfo {
         std::string text;
@@ -40,6 +42,7 @@ private:
     struct Scene {
         std::vector<LineInfo> lines;
         std::string bgPath;
+        std::string ambientSound;
     };
 
     std::vector<Scene> mScenes;
@@ -70,5 +73,6 @@ private:
 
     ma_engine* mSoundEngine;
     ma_sound* mCurrentSound;
+    ma_sound* mAmbientSound;
     bool mWaitingForSound;
 };
