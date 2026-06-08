@@ -20,6 +20,7 @@
 #include "Menu.h"
 #include "CubemapTexture.h"
 #include "VisualNovel.h"
+#include "Model.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -34,12 +35,15 @@ static const float SPRITE_X = 900.0f;
 enum class AppState {
     Loading,
     Menu,
+    StoryChoice,
     Credits,
     CloudTransition,
     DreamLoading,
     DreamBlack,
     VisualNovel,
-    DreamState
+    DreamState,
+    HouseLoading,
+    HouseWalk
 };
 
 struct CloudTile {
@@ -56,6 +60,12 @@ static AppState* gStatePtr = nullptr;
 static bool gCreditsPaused = false;
 static double gCreditsPauseStarted = 0.0;
 static double gCreditsPauseAccum = 0.0;
+static bool gStoryCloudOnly = false;
+static bool gHouseCapturedMouse = false;
+
+static bool pointInRect(double x, double y, float rx, float ry, float rw, float rh) {
+    return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
+}
 
 static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS && gStatePtr && *gStatePtr == AppState::Credits) {
@@ -74,7 +84,10 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
         if (gMenu && gStatePtr && *gStatePtr == AppState::Menu) {
             int hovered = gMenu->getHoveredIndex();
             if (hovered == 0) {
-                *gStatePtr = AppState::CloudTransition;
+                *gStatePtr = AppState::StoryChoice;
+                gCreditsPaused = false;
+                gCreditsPauseStarted = 0.0;
+                gCreditsPauseAccum = 0.0;
             } else if (hovered == 3) {
                 *gStatePtr = AppState::Credits;
                 gCreditsPaused = false;
@@ -82,6 +95,24 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
                 gCreditsPauseAccum = 0.0;
             } else if (hovered == 4) {
                 glfwSetWindowShouldClose(window, GLFW_TRUE);
+            }
+        } else if (gStatePtr && *gStatePtr == AppState::StoryChoice) {
+            double mx, my;
+            glfwGetCursorPos(window, &mx, &my);
+            float btnW = 480.0f;
+            float btnH = 76.0f;
+            float btnX = (WINDOW_WIDTH - btnW) / 2.0f;
+            float skipY = WINDOW_HEIGHT * 0.44f;
+            float viewY = WINDOW_HEIGHT * 0.58f;
+
+            if (pointInRect(mx, my, btnX, skipY, btnW, btnH)) {
+                *gStatePtr = AppState::HouseLoading;
+                gHouseCapturedMouse = false;
+                return;
+            }
+            if (pointInRect(mx, my, btnX, viewY, btnW, btnH)) {
+                gStoryCloudOnly = true;
+                *gStatePtr = AppState::CloudTransition;
             }
         } else if (gStatePtr && *gStatePtr == AppState::Credits) {
             gCreditsPaused = false;
@@ -306,6 +337,7 @@ int main() {
     Texture* flashlightIcon = createFlashlightIcon();
     Texture* underlineTex = createWhiteTexture();
     Texture* loadingBarTex = createWhiteTexture();
+    Texture storyBgTex("assets/textures/fondo.png");
 
     TextRenderer textRenderer("assets/fonts/Roboto.ttf", 35, &textShader);
     TextRenderer creditsTextRenderer("assets/fonts/Roboto.ttf", 60, &textShader);
@@ -338,6 +370,36 @@ int main() {
 
     Texture* glowTex = createGlowTexture();
     Texture* oficinaTex = new Texture("assets/textures/oficina.png");
+    Shader modelShader("assets/shaders/model.vert", "assets/shaders/model.frag");
+    Model houseModel;
+    bool houseLoaded = false;
+    glm::vec3 housePos(0.0f);
+    glm::vec3 camPos(0.0f, 1.8f, 6.0f);
+    glm::vec3 camFront(0.0f, 0.0f, -1.0f);
+    glm::vec3 camUp(0.0f, 1.0f, 0.0f);
+    float camYaw = -90.0f;
+    float camPitch = 0.0f;
+    double lastMouseX = WINDOW_WIDTH * 0.5;
+    double lastMouseY = WINDOW_HEIGHT * 0.5;
+    bool firstMouse = true;
+    float houseModelScale = 1.0f;
+    glm::vec3 houseCenter(0.0f);
+    glm::vec3 houseMin(0.0f), houseMax(0.0f);
+    float houseLoadingTimer = 0.0f;
+    bool houseLoadingStarted = false;
+    const float houseTargetSize = 120.0f;
+    float houseVerticalVelocity = 0.0f;
+
+    auto placeCameraInsideHouse = [&]() {
+        glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
+        glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
+        glm::vec3 centerW = (minW + maxW) * 0.5f;
+        camPos = housePos + glm::vec3(centerW.x, minW.y + std::max(1.25f, (maxW.y - minW.y) * 0.35f), centerW.z);
+        camFront = glm::normalize((housePos + centerW) - camPos);
+        camYaw = -90.0f;
+        camPitch = 0.0f;
+        firstMouse = true;
+    };
 
     // Cloud transition animation
     float cloudAnimTimer = 0.0f;
@@ -541,6 +603,42 @@ int main() {
             std::string credits = "Hecho por Torres-Chavez-Torrez";
             glm::vec2 sz = textRenderer.getTextSize(credits, 0.35f);
             textRenderer.renderText(credits, WINDOW_WIDTH - sz.x - 20.0f, WINDOW_HEIGHT - 30.0f, 0.35f, glm::vec3(0.6f));
+        } else if (state == AppState::StoryChoice) {
+            glDisable(GL_DEPTH_TEST);
+            renderSprite(quadVAO, spriteShader, storyBgTex, proj,
+                         0.0f, 0.0f, (float)WINDOW_WIDTH, (float)WINDOW_HEIGHT,
+                         glm::vec4(1.0f));
+
+            float btnW = 480.0f;
+            float btnH = 76.0f;
+            float btnX = (WINDOW_WIDTH - btnW) / 2.0f;
+            float skipY = WINDOW_HEIGHT * 0.44f;
+            float viewY = WINDOW_HEIGHT * 0.58f;
+
+            textRenderer.renderText("Choose how to start",
+                (WINDOW_WIDTH - 360.0f) / 2.0f, 120.0f,
+                0.72f, glm::vec3(0.96f, 0.92f, 0.80f));
+
+            renderSprite(quadVAO, spriteShader, *underlineTex, proj,
+                         btnX, skipY, btnW, btnH,
+                         glm::vec4(0.18f, 0.16f, 0.13f, 0.82f));
+            renderSprite(quadVAO, spriteShader, *underlineTex, proj,
+                         btnX, viewY, btnW, btnH,
+                         glm::vec4(0.18f, 0.16f, 0.13f, 0.82f));
+
+            renderSprite(quadVAO, spriteShader, *underlineTex, proj,
+                         btnX + 6.0f, skipY + 6.0f, btnW - 12.0f, btnH - 12.0f,
+                         glm::vec4(0.04f, 0.04f, 0.05f, 0.22f));
+            renderSprite(quadVAO, spriteShader, *underlineTex, proj,
+                         btnX + 6.0f, viewY + 6.0f, btnW - 12.0f, btnH - 12.0f,
+                         glm::vec4(0.04f, 0.04f, 0.05f, 0.22f));
+
+            textRenderer.renderText("Saltar Historia",
+                btnX + 120.0f, skipY + 48.0f,
+                0.82f, glm::vec3(0.98f, 0.94f, 0.86f));
+            textRenderer.renderText("Ver Historia",
+                btnX + 145.0f, viewY + 48.0f,
+                0.82f, glm::vec3(0.98f, 0.94f, 0.86f));
         } else if (state == AppState::Credits) {
             double creditsNow = glfwGetTime();
             double creditsElapsed = gCreditsPaused ? (gCreditsPauseStarted - gCreditsPauseAccum) : (creditsNow - gCreditsPauseAccum);
@@ -686,63 +784,65 @@ int main() {
 
             cloudAnimTimer += dt;
 
-            // Update menu items with slide offset
-            float slideProgress = std::min(cloudAnimTimer / 1.5f, 1.0f);
-            float slideOffset = slideProgress * 400.0f;
-            menu.setSlideOffset(slideOffset);
+            if (!gStoryCloudOnly) {
+                // Update menu items with slide offset
+                float slideProgress = std::min(cloudAnimTimer / 1.5f, 1.0f);
+                float slideOffset = slideProgress * 400.0f;
+                menu.setSlideOffset(slideOffset);
 
-            // Still render skybox and character
-            menu.update((float)mx, (float)my);
-            {
-                float normalizedY = (float)my / (float)WINDOW_HEIGHT;
-                if (normalizedY < 0.0f) normalizedY = 0.0f;
-                if (normalizedY > 1.0f) normalizedY = 1.0f;
-                currentFrame = (int)(normalizedY * (SPRITE_FRAMES - 1));
-            }
+                // Still render skybox and character
+                menu.update((float)mx, (float)my);
+                {
+                    float normalizedY = (float)my / (float)WINDOW_HEIGHT;
+                    if (normalizedY < 0.0f) normalizedY = 0.0f;
+                    if (normalizedY > 1.0f) normalizedY = 1.0f;
+                    currentFrame = (int)(normalizedY * (SPRITE_FRAMES - 1));
+                }
 
-            glEnable(GL_DEPTH_TEST);
-            glDepthFunc(GL_LEQUAL);
-            float rotAngle = (float)glfwGetTime() * 10.0f;
-            glm::mat4 skyModel = glm::rotate(glm::mat4(1.0f), glm::radians(rotAngle), glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::mat4 skyProj = glm::perspective(glm::radians(90.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
-            glm::mat4 skyView = glm::mat4(1.0f);
-            skyboxShader.use();
-            skyboxShader.setMat4("uProjection", glm::value_ptr(skyProj));
-            skyboxShader.setMat4("uView", glm::value_ptr(skyView));
-            skyboxShader.setMat4("uModel", glm::value_ptr(skyModel));
-            skyboxShader.setInt("uSkybox", 0);
-            skyboxTex->bind(0);
-            glBindVertexArray(skyboxVAO);
-            glDrawArrays(GL_TRIANGLES, 0, 36);
-            glDisable(GL_DEPTH_TEST);
+                glEnable(GL_DEPTH_TEST);
+                glDepthFunc(GL_LEQUAL);
+                float rotAngle = (float)glfwGetTime() * 10.0f;
+                glm::mat4 skyModel = glm::rotate(glm::mat4(1.0f), glm::radians(rotAngle), glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::mat4 skyProj = glm::perspective(glm::radians(90.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
+                glm::mat4 skyView = glm::mat4(1.0f);
+                skyboxShader.use();
+                skyboxShader.setMat4("uProjection", glm::value_ptr(skyProj));
+                skyboxShader.setMat4("uView", glm::value_ptr(skyView));
+                skyboxShader.setMat4("uModel", glm::value_ptr(skyModel));
+                skyboxShader.setInt("uSkybox", 0);
+                skyboxTex->bind(0);
+                glBindVertexArray(skyboxVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 36);
+                glDisable(GL_DEPTH_TEST);
 
-            // Character sprite
-            float sw = (float)spriteFrames[0]->getWidth();
-            float sh = (float)spriteFrames[0]->getHeight();
-            renderSprite(quadVAO, spriteShader, *spriteFrames[currentFrame], proj,
-                         SPRITE_X, spriteY - sh / 2.0f, sw, sh, glm::vec4(1.0f));
+                // Character sprite
+                float sw = (float)spriteFrames[0]->getWidth();
+                float sh = (float)spriteFrames[0]->getHeight();
+                renderSprite(quadVAO, spriteShader, *spriteFrames[currentFrame], proj,
+                             SPRITE_X, spriteY - sh / 2.0f, sw, sh, glm::vec4(1.0f));
 
-            // Logo
-            float lw = (float)logoTex.getWidth();
-            float lh = (float)logoTex.getHeight();
-            float lx = (WINDOW_WIDTH - lw) / 2.0f;
-            float ly = 30.0f;
-            renderSprite(quadVAO, spriteShader, logoTex, proj, lx, ly, lw, lh, glm::vec4(1.0f));
+                // Logo
+                float lw = (float)logoTex.getWidth();
+                float lh = (float)logoTex.getHeight();
+                float lx = (WINDOW_WIDTH - lw) / 2.0f;
+                float ly = 30.0f;
+                renderSprite(quadVAO, spriteShader, logoTex, proj, lx, ly, lw, lh, glm::vec4(1.0f));
 
-            // Render menu items with slide offset
-            {
-                const auto& items = menu.getItems();
-                for (size_t i = 0; i < items.size(); i++) {
-                    float itemY = items[i].y + slideOffset;
-                    if (items[i].hovered) {
-                        float cx = items[i].x + items[i].w / 2.0f;
-                        float cy = itemY + items[i].h / 2.0f + 15.0f;
-                        renderSprite(quadVAO, spriteShader, *glowTex, proj,
-                                     cx - 200.0f, cy - 50.0f, 400.0f, 100.0f,
-                                     glm::vec4(1.0f, 0.95f, 0.8f, 0.5f));
+                // Render menu items with slide offset
+                {
+                    const auto& items = menu.getItems();
+                    for (size_t i = 0; i < items.size(); i++) {
+                        float itemY = items[i].y + slideOffset;
+                        if (items[i].hovered) {
+                            float cx = items[i].x + items[i].w / 2.0f;
+                            float cy = itemY + items[i].h / 2.0f + 15.0f;
+                            renderSprite(quadVAO, spriteShader, *glowTex, proj,
+                                         cx - 200.0f, cy - 50.0f, 400.0f, 100.0f,
+                                         glm::vec4(1.0f, 0.95f, 0.8f, 0.5f));
+                        }
+                        glm::vec3 color = items[i].hovered ? glm::vec3(1.0f, 0.95f, 0.8f) : glm::vec3(0.9f, 0.9f, 0.9f);
+                        textRenderer.renderText(items[i].text, items[i].x, itemY, TEXT_SCALE, color);
                     }
-                    glm::vec3 color = items[i].hovered ? glm::vec3(1.0f, 0.95f, 0.8f) : glm::vec3(0.9f, 0.9f, 0.9f);
-                    textRenderer.renderText(items[i].text, items[i].x, itemY, TEXT_SCALE, color);
                 }
             }
 
@@ -777,8 +877,132 @@ int main() {
 
             // Check if animation is done
             if (cloudAnimTimer >= cloudAnimDuration) {
+                gStoryCloudOnly = false;
                 state = AppState::DreamLoading;
                 dreamLoadingTimer = 0.0f;
+            }
+        } else if (state == AppState::HouseLoading) {
+            if (!houseLoadingStarted) {
+                houseLoadingStarted = true;
+                houseLoadingTimer = 0.0f;
+                houseLoaded = houseModel.load("assets/models/child_bedroom/scene.gltf");
+                houseMin = houseModel.boundsMin();
+                houseMax = houseModel.boundsMax();
+                if (houseLoaded) {
+                    houseCenter = (houseMin + houseMax) * 0.5f;
+                    glm::vec3 size = houseMax - houseMin;
+                    float biggest = std::max(size.x, std::max(size.y, size.z));
+                    houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
+                    placeCameraInsideHouse();
+                }
+            }
+
+            houseLoadingTimer += dt;
+            float p = std::min(houseLoadingTimer / 1.2f, 1.0f);
+            glDisable(GL_DEPTH_TEST);
+            bgShader.use();
+            bgShader.setInt("uTexture", 0);
+            bgShader.setFloat("uBlurAmount", 6.0f);
+            bgTex.bind(0);
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::scale(model, glm::vec3(WINDOW_WIDTH, WINDOW_HEIGHT, 1.0f));
+            bgShader.setMat4("uModel", glm::value_ptr(model));
+            bgShader.setMat4("uProjection", glm::value_ptr(proj));
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+
+            float barW = 620.0f;
+            float barH = 26.0f;
+            float barX = (WINDOW_WIDTH - barW) / 2.0f;
+            float barY = WINDOW_HEIGHT * 0.72f;
+            renderSprite(quadVAO, spriteShader, *loadingBarTex, proj,
+                         barX, barY, barW, barH,
+                         glm::vec4(0.15f, 0.15f, 0.15f, 0.92f));
+            renderSprite(quadVAO, spriteShader, *loadingBarTex, proj,
+                         barX, barY, barW * p, barH,
+                         glm::vec4(0.82f, 0.74f, 0.55f, 0.95f));
+            textRenderer.renderText("Preparando escenario...", (WINDOW_WIDTH - 240.0f) / 2.0f, barY - 36.0f, 0.5f, glm::vec3(0.95f));
+
+            if (p >= 1.0f) {
+                state = AppState::HouseWalk;
+                houseLoadingStarted = false;
+            }
+        } else if (state == AppState::HouseWalk) {
+            if (!houseLoaded) {
+                houseLoaded = houseModel.load("assets/models/child_bedroom/scene.gltf");
+                houseMin = houseModel.boundsMin();
+                houseMax = houseModel.boundsMax();
+                if (houseLoaded) {
+                    houseCenter = (houseMin + houseMax) * 0.5f;
+                    glm::vec3 size = houseMax - houseMin;
+                    float biggest = std::max(size.x, std::max(size.y, size.z));
+                    houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
+                    placeCameraInsideHouse();
+                }
+            }
+            if (!gHouseCapturedMouse) {
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                gHouseCapturedMouse = true;
+                firstMouse = true;
+            }
+            double mx2, my2;
+            glfwGetCursorPos(gWindow, &mx2, &my2);
+            if (firstMouse) { lastMouseX = mx2; lastMouseY = my2; firstMouse = false; }
+            float xoffset = (float)(mx2 - lastMouseX) * 0.08f;
+            float yoffset = (float)(lastMouseY - my2) * 0.08f;
+            lastMouseX = mx2; lastMouseY = my2;
+            camYaw += xoffset;
+            camPitch += yoffset;
+            if (camPitch > 89.0f) camPitch = 89.0f;
+            if (camPitch < -89.0f) camPitch = -89.0f;
+            glm::vec3 front;
+            front.x = cos(glm::radians(camYaw)) * cos(glm::radians(camPitch));
+            front.y = sin(glm::radians(camPitch));
+            front.z = sin(glm::radians(camYaw)) * cos(glm::radians(camPitch));
+            camFront = glm::normalize(front);
+            glm::vec3 right = glm::normalize(glm::cross(camFront, camUp));
+            float speed = 7.5f * dt;
+            glm::vec3 next = camPos;
+            if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) next += camFront * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) next -= camFront * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) next -= right * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) next += right * speed;
+            glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
+            glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
+            float floorY = minW.y + 0.25f;
+            bool grounded = camPos.y <= floorY + 0.02f;
+            if (grounded) {
+                camPos.y = floorY;
+                houseVerticalVelocity = 0.0f;
+                if (glfwGetKey(gWindow, GLFW_KEY_SPACE) == GLFW_PRESS) {
+                    houseVerticalVelocity = 4.0f;
+                }
+            }
+            houseVerticalVelocity -= 9.8f * dt;
+            next.y = camPos.y + houseVerticalVelocity * dt;
+            if (next.y < floorY) {
+                next.y = floorY;
+                houseVerticalVelocity = 0.0f;
+            }
+            camPos = next;
+            glDisable(GL_CULL_FACE);
+            glEnable(GL_DEPTH_TEST);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glm::mat4 view = glm::lookAt(camPos, camPos + camFront, camUp);
+            glm::mat4 projection = glm::perspective(glm::radians(70.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.05f, 500.0f);
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), housePos);
+            model = glm::translate(model, -houseCenter);
+            model = glm::scale(model, glm::vec3(houseModelScale));
+            modelShader.use();
+            modelShader.setMat4("uModel", glm::value_ptr(model));
+            modelShader.setMat4("uView", glm::value_ptr(view));
+            modelShader.setMat4("uProjection", glm::value_ptr(projection));
+            modelShader.setVec3("uBaseColor", 0.82f, 0.80f, 0.76f);
+            if (houseLoaded) houseModel.draw(modelShader);
+            else {
+                glDisable(GL_DEPTH_TEST);
+                textRenderer.renderText("Failed to load house model", 40.0f, 40.0f, 0.6f, glm::vec3(1.0f, 0.6f, 0.6f));
+                textRenderer.renderText(houseModel.lastError(), 40.0f, 80.0f, 0.4f, glm::vec3(1.0f, 0.8f, 0.8f));
             }
         } else if (state == AppState::DreamLoading) {
             dreamLoadingTimer += dt;
