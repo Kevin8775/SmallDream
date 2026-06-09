@@ -1,0 +1,11 @@
+Model Information:
+* title:	Low poly suburban house with interior
+* source:	https://sketchfab.com/3d-models/low-poly-suburban-house-with-interior-6c6f1bff32064cd2ae8f58f751b76e70
+* author:	Azazel750 (https://sketchfab.com/BihexmorForgotHisPassword)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Low poly suburban house with interior" (https://sketchfab.com/3d-models/low-poly-suburban-house-with-interior-6c6f1bff32064cd2ae8f58f751b76e70) by Azazel750 (https://sketchfab.com/BihexmorForgotHisPassword) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

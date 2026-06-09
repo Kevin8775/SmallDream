@@ -50,97 +50,97 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
         mScenes.back().lines.push_back({text, sound, wait});
     };
 
-    // Scene 0: Oficina
+    // Scene 0: Office
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/oficina.png";
-    addLine("Otro d\u00eda frente a la misma pantalla.");
-    addLine("Las mismas teclas.");
-    addLine("Los mismos pasillos.");
-    addLine("Las mismas luces que nunca parec\u00edan apagarse.");
-    addLine("Mir\u00e9 el reloj.");
+    addLine("Another day in front of the same screen.");
+    addLine("The same keys.");
+    addLine("The same hallways.");
+    addLine("The same lights that never seemed to go out.");
+    addLine("I looked at the clock.");
     addLine("22:47.");
-    addLine("Ya era tarde.");
-    addLine("Guard\u00e9 los \u00faltimos archivos.");
-    addLine("Apagu\u00e9 la pantalla.");
-    addLine("Y por fin me levant\u00e9.");
-    addLine("*Empujo la silla hacia atr\u00e1s.*", "assets/sounds/ui/arrastrar_silla.mp3", true);
-    addLine("*Recojo mi mochila.*", "assets/sounds/ui/mochila.mp3", true);
-    addLine("...y me voy a mi casa.");
+    addLine("It was already late.");
+    addLine("I saved the last files.");
+    addLine("I turned off the screen.");
+    addLine("And I finally got up.");
+    addLine("*I push the chair back.*", "assets/sounds/ui/arrastrar_silla.mp3", true);
+    addLine("*I grab my backpack.*", "assets/sounds/ui/mochila.mp3", true);
+    addLine("...and I head home.");
 
-    // Scene 1: Empresa (exterior)
+    // Scene 1: Office building (exterior)
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/empresa.png";
-    addLine("*Las puertas de vidrio se abren lentamente.*", "assets/sounds/ui/puerta_vidrio.mp3");
-    addLine("*Una corriente de aire fresco golpea mi rostro.*");
-    addLine("Mucho mejor.");
-    addLine("*Comienzo a caminar por la calle.*", "assets/sounds/ui/pasos_2.mp3");
-    addLine("Solo quer\u00eda llegar a casa.");
-    addLine("Nada m\u00e1s.");
+    addLine("*The glass doors slide open slowly.*", "assets/sounds/ui/puerta_vidrio.mp3");
+    addLine("*A stream of fresh air hits my face.*");
+    addLine("Much better.");
+    addLine("*I start walking down the street.*", "assets/sounds/ui/pasos_2.mp3");
+    addLine("I just wanted to get home.");
+    addLine("Nothing else.");
 
-    // Scene 2: Calle
+    // Scene 2: Street
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/calle.png";
     mScenes.back().ambientSound = "assets/sounds/ui/viento.mp3";
-    addLine("*Las farolas iluminan la acera con una luz c\u00e1lida.*");
-    addLine("*La ciudad parece m\u00e1s tranquila de lo habitual.*");
-    addLine("Qu\u00e9 silencio...");
-    addLine("*Contin\u00fao caminando.*", "assets/sounds/ui/pasos_2.mp3");
-    addLine("*El sonido de mis pasos resuena en la calle vac\u00eda.*", "assets/sounds/ui/pasos_2.mp3");
-    addLine("Supongo que ya es bastante tarde.");
-    addLine("*Levanto la vista hacia el cielo nocturno.*");
-    addLine("No recuerdo la \u00faltima vez que sal\u00ed tan tarde.");
-    addLine("*Una brisa fr\u00eda recorre la calle.*");
-    addLine("Solo quiero llegar a casa.");
-    addLine("Descansar un poco.");
-    addLine("*La silueta de mi casa aparece al final de la calle.*");
+    addLine("*The streetlights warm the sidewalk with a soft glow.*");
+    addLine("*The city seems quieter than usual.*");
+    addLine("So quiet...");
+    addLine("*I keep walking.*", "assets/sounds/ui/pasos_2.mp3");
+    addLine("*The sound of my footsteps echoes in the empty street.*", "assets/sounds/ui/pasos_2.mp3");
+    addLine("I guess it's already pretty late.");
+    addLine("*I look up at the night sky.*");
+    addLine("I don't remember the last time I was out this late.");
+    addLine("*A cold breeze sweeps through the street.*");
+    addLine("I just want to get home.");
+    addLine("Get some rest.");
+    addLine("*The silhouette of my house appears at the end of the street.*");
 
-    // Scene 3: Casa
+    // Scene 3: Home
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa.png";
-    addLine("*Abro la puerta y entro en casa.*", "assets/sounds/ui/puerta_casa.mp3", true);
-    addLine("*El silencio me recibe al instante.*");
-    addLine("*Dejo las llaves sobre la mesa.*", "assets/sounds/ui/llaves.mp3", true);
-    addLine("*La l\u00e1mpara de la sala ilumina suavemente la habitaci\u00f3n.*");
-    addLine("Hogar.");
-    addLine("*Dejo la mochila en el suelo.*", "assets/sounds/ui/mochila.mp3", true);
-    addLine("*Mis hombros se sienten m\u00e1s ligeros.*");
-    addLine("Por fin.");
-    addLine("*Observo la sala durante unos segundos.*");
-    addLine("Nunca pens\u00e9 que un lugar tan simple pudiera sentirse tan bien.");
-    addLine("*Camino lentamente hacia el sill\u00f3n.*");
-    addLine("Solo necesito descansar un poco.");
+    addLine("*I open the door and step inside.*", "assets/sounds/ui/puerta_casa.mp3", true);
+    addLine("*Silence greets me at once.*");
+    addLine("*I leave the keys on the table.*", "assets/sounds/ui/llaves.mp3", true);
+    addLine("*The living room lamp casts a gentle light across the room.*");
+    addLine("Home.");
+    addLine("*I drop my backpack on the floor.*", "assets/sounds/ui/mochila.mp3", true);
+    addLine("*My shoulders feel lighter.*");
+    addLine("At last.");
+    addLine("*I take in the room for a few seconds.*");
+    addLine("I never thought such a simple place could feel this good.");
+    addLine("*I walk slowly toward the couch.*");
+    addLine("I just need to rest a little.");
 
-    // Scene 4: Casa por dentro (sill\u00f3n)
+    // Scene 4: Living room (couch)
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa_por_dentro.png";
-    addLine("*Me dejo caer sobre el sill\u00f3n.*");
-    addLine("*El cansancio del d\u00eda parece alcanzarme de golpe.*");
+    addLine("*I let myself fall onto the couch.*");
+    addLine("*The exhaustion of the day hits me all at once.*");
     addLine("Ah...");
-    addLine("*Apoyo la cabeza.*");
-    addLine("*Cierro los ojos por un momento.*");
-    addLine("Solo unos minutos.");
-    addLine("Despu\u00e9s me levantar\u00e9.");
-    addLine("*Respiro profundamente.*");
-    addLine("Eso pensaba siempre.");
-    addLine("*El silencio llena la habitaci\u00f3n.*");
-    addLine("*Poco a poco todo comienza a desvanecerse.*");
+    addLine("*I rest my head back.*");
+    addLine("*I close my eyes for a moment.*");
+    addLine("Just a few minutes.");
+    addLine("Then I'll get up.");
+    addLine("*I take a deep breath.*");
+    addLine("That's what I always told myself.");
+    addLine("*Silence fills the room.*");
+    addLine("*Little by little, everything begins to fade away.*");
 
-    // Scene 5: Casa oscura/borrosa
+    // Scene 5: Dark / blurry house
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa_oscura.png";
     addLine("...");
     addLine("...");
-    addLine("*La habitaci\u00f3n parece extra\u00f1amente silenciosa.*");
+    addLine("*The room feels strangely silent.*");
     addLine("...");
-    addLine("*Por un instante, todo se siente distante.*");
+    addLine("*For a moment, everything feels distant.*");
     addLine("...");
 
-    // Scene 6: Negro
+    // Scene 6: Black
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/negro.png";
     addLine("...");
     addLine("...");
-    addLine("\u00bf...?");
+    addLine("...?");
 
     mBackground = new Texture(mScenes[0].bgPath);
 }
