@@ -18,6 +18,7 @@ struct ModelMesh {
     GLuint vbo = 0;
     GLuint ebo = 0;
     Texture* diffuseTexture = nullptr;
+    glm::vec3 baseColor = glm::vec3(1.0f);
     std::vector<unsigned int> indices;
     size_t indexCount = 0;
 

@@ -4,6 +4,9 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+struct ma_engine;
+struct ma_sound;
+
 class Texture;
 class TextRenderer;
 class Shader;
@@ -20,13 +23,26 @@ public:
     void render();
     bool isFinished() const;
     void setBackground(Texture* bg);
+    void setSoundEngine(ma_engine* engine);
 
 private:
     void advanceLine();
     void calcLayout();
+    void playCurrentLineSound();
+    void stopCurrentSound();
+    void startAmbient();
+    void stopAmbient();
+
+    struct LineInfo {
+        std::string text;
+        std::string soundPath;
+        bool waitForSound;
+    };
 
     struct Scene {
-        std::vector<std::string> lines;
+        std::vector<LineInfo> lines;
+        std::string bgPath;
+        std::string ambientSound;
     };
 
     std::vector<Scene> mScenes;
@@ -39,7 +55,12 @@ private:
     bool mAllDone;
 
     Texture* mBackground;
+    Texture* mNextBg;
+    Texture* mPrevBg;
     Texture* mDialogBox;
+    bool mTransitioning;
+    float mTransitionTimer;
+    float mTransitionDuration;
     float mBoxX, mBoxY, mBoxW, mBoxH;
     float mTextX, mTextY, mTextW, mTextH;
 
@@ -49,4 +70,13 @@ private:
     glm::mat4 mProj;
     int mWindowWidth;
     int mWindowHeight;
+
+    ma_engine* mSoundEngine;
+    ma_sound* mCurrentSound;
+    ma_sound* mAmbientSound;
+    bool mWaitingForSound;
+
+    float mEndTimer;
+    float mEndDelay;
+    bool mEndTimerActive;
 };

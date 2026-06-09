@@ -4,11 +4,11 @@
 
 Menu::Menu() : mTextRenderer(nullptr), mWindowWidth(0), mWindowHeight(0), mHoveredIndex(-1), mTextScale(1.0f) {
     mItems = {
-        {"Nuevo Sue\u00f1o", 0, 0, 0, 0, false},
-        {"Continuar Exploraci\u00f3n", 0, 0, 0, 0, false},
-        {"Ajustes de Casa", 0, 0, 0, 0, false},
-        {"Cr\u00e9ditos", 0, 0, 0, 0, false},
-        {"Salir", 0, 0, 0, 0, false}
+        {"New Dream", 0, 0, 0, 0, false},
+        {"Continue Exploring", 0, 0, 0, 0, false},
+        {"Controls", 0, 0, 0, 0, false},
+        {"Credits", 0, 0, 0, 0, false},
+        {"Exit", 0, 0, 0, 0, false}
     };
 }
 
