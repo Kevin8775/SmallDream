@@ -19,6 +19,7 @@
 #include "TextRenderer.h"
 #include "Menu.h"
 #include "CubemapTexture.h"
+#include "Localization.h"
 #include "VisualNovel.h"
 #include "Model.h"
 
@@ -43,6 +44,7 @@ enum class AppState {
     DreamBlack,
     VisualNovel,
     DreamState,
+    Pause,
     HouseLoading,
     HouseWalk
 };
@@ -63,6 +65,7 @@ static double gCreditsPauseStarted = 0.0;
 static double gCreditsPauseAccum = 0.0;
 static bool gStoryCloudOnly = false;
 static bool gHouseCapturedMouse = false;
+static AppState gPauseReturnState = AppState::Menu;
 
 static bool pointInRect(double x, double y, float rx, float ry, float rw, float rh) {
     return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
@@ -89,6 +92,9 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
                 gCreditsPaused = false;
                 gCreditsPauseStarted = 0.0;
                 gCreditsPauseAccum = 0.0;
+            } else if (hovered == 1) {
+                *gStatePtr = AppState::HouseLoading;
+                gHouseCapturedMouse = false;
             } else if (hovered == 2) {
                 *gStatePtr = AppState::Controls;
                 gCreditsPaused = false;
@@ -100,6 +106,10 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
                 gCreditsPauseStarted = 0.0;
                 gCreditsPauseAccum = glfwGetTime();
             } else if (hovered == 4) {
+                Localization::toggle();
+                Localization::save("language.cfg");
+                if (gMenu) gMenu->setLanguage(Localization::current());
+            } else if (hovered == 5) {
                 glfwSetWindowShouldClose(window, GLFW_TRUE);
             }
         } else if (gStatePtr && *gStatePtr == AppState::StoryChoice) {
@@ -277,6 +287,21 @@ static void renderSprite(GLuint vao, Shader& shader, Texture& tex, const glm::ma
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        if (gStatePtr && (*gStatePtr == AppState::HouseWalk || *gStatePtr == AppState::VisualNovel)) {
+            gPauseReturnState = *gStatePtr;
+            *gStatePtr = AppState::Pause;
+            if (gPauseReturnState == AppState::HouseWalk) {
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            }
+            return;
+        }
+        if (gStatePtr && *gStatePtr == AppState::Pause) {
+            *gStatePtr = gPauseReturnState;
+            if (*gStatePtr == AppState::HouseWalk) {
+                gHouseCapturedMouse = false;
+            }
+            return;
+        }
         if (gStatePtr && *gStatePtr == AppState::Credits) {
             *gStatePtr = AppState::Menu;
             return;
@@ -320,6 +345,8 @@ int main() {
         std::cerr << "Failed to init GLAD" << std::endl;
         return -1;
     }
+
+    Localization::load("language.cfg");
 
     glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
     glEnable(GL_BLEND);
@@ -372,6 +399,7 @@ int main() {
 
     Menu menu;
     menu.init(&textRenderer, WINDOW_WIDTH, WINDOW_HEIGHT, TEXT_SCALE);
+    menu.setLanguage(Localization::current());
     gMenu = &menu;
 
     GLuint quadVAO = createQuadVAO();
@@ -482,6 +510,40 @@ int main() {
 
     float spriteY = WINDOW_HEIGHT / 2.0f;
 
+    auto returnToMenuFromPause = [&]() {
+        if (gPauseReturnState == AppState::HouseWalk) {
+            glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            gHouseCapturedMouse = false;
+            houseModel.destroy();
+            houseLoaded = false;
+            houseLoadingStarted = false;
+            houseLoadingTimer = 0.0f;
+            houseVerticalVelocity = 0.0f;
+            firstMouse = true;
+        } else if (gPauseReturnState == AppState::VisualNovel) {
+            if (visualNovel) visualNovel->reset();
+            dreamLoadingTimer = 0.0f;
+            dreamBlackTimer = 0.0f;
+            tecladoPlayed = false;
+            if (hasTecladoSound) {
+                ma_sound_stop(&tecladoSound);
+                ma_sound_uninit(&tecladoSound);
+                hasTecladoSound = false;
+            }
+        }
+
+        cloudAnimTimer = 0.0f;
+        cloudTilesGenerated = false;
+        cloudTiles.clear();
+        gStoryCloudOnly = false;
+        menu.setSlideOffset(0.0f);
+        gCreditsPaused = false;
+        gCreditsPauseStarted = 0.0;
+        gCreditsPauseAccum = 0.0;
+        state = AppState::Menu;
+        gPauseReturnState = AppState::Menu;
+    };
+
     // For delta time tracking
     double lastTime = glfwGetTime();
 
@@ -570,7 +632,11 @@ int main() {
                          barX, barY, loadingBarWidth * loadingProgress, loadingBarHeight,
                          glm::vec4(0.85f, 0.78f, 0.55f, 0.95f));
 
-            textRenderer.renderText("LOADING RESOURCES...", (WINDOW_WIDTH - 230.0f) / 2.0f, barY - 36.0f, 0.5f, glm::vec3(0.9f));
+            {
+                std::string loadingText = Localization::t(TextId::LoadingResources);
+                glm::vec2 loadingSz = textRenderer.getTextSize(loadingText, 0.5f);
+                textRenderer.renderText(loadingText, (WINDOW_WIDTH - loadingSz.x) / 2.0f, barY - 36.0f, 0.5f, glm::vec3(0.9f));
+            }
         } else if (state == AppState::Menu) {
             {
                 float normalizedY = (float)my / (float)WINDOW_HEIGHT;
@@ -624,9 +690,9 @@ int main() {
                 textRenderer.renderText(items[i].text, items[i].x, items[i].y, TEXT_SCALE, color);
             }
 
-            textRenderer.renderText("VERSI\u00d3N 0.9a (BUILD ALPHA)", 20.0f, WINDOW_HEIGHT - 30.0f, 0.35f, glm::vec3(0.6f));
+            textRenderer.renderText(Localization::t(TextId::VersionAlpha), 20.0f, WINDOW_HEIGHT - 30.0f, 0.35f, glm::vec3(0.6f));
 
-            std::string credits = "Made by Torres-Chavez-Torrez";
+            std::string credits = Localization::t(TextId::CreditsMadeBy);
             glm::vec2 sz = textRenderer.getTextSize(credits, 0.35f);
             textRenderer.renderText(credits, WINDOW_WIDTH - sz.x - 20.0f, WINDOW_HEIGHT - 30.0f, 0.35f, glm::vec3(0.6f));
         } else if (state == AppState::StoryChoice) {
@@ -641,9 +707,14 @@ int main() {
             float skipY = WINDOW_HEIGHT * 0.44f;
             float viewY = WINDOW_HEIGHT * 0.58f;
 
-            textRenderer.renderText("Choose how to start",
-                (WINDOW_WIDTH - 360.0f) / 2.0f + 60.0f, 120.0f,
-                0.72f, glm::vec3(0.96f, 0.92f, 0.80f));
+            {
+                std::string startTitle = Localization::t(TextId::ChooseHowToStart);
+                glm::vec2 startTitleSz = textRenderer.getTextSize(startTitle, 0.72f);
+                textRenderer.renderText(startTitle,
+                    (WINDOW_WIDTH - startTitleSz.x) / 2.0f,
+                    120.0f,
+                    0.72f, glm::vec3(0.96f, 0.92f, 0.80f));
+            }
 
             renderSprite(quadVAO, spriteShader, *underlineTex, proj,
                          btnX, skipY, btnW, btnH,
@@ -659,13 +730,15 @@ int main() {
                          btnX + 6.0f, viewY + 6.0f, btnW - 12.0f, btnH - 12.0f,
                          glm::vec4(0.04f, 0.04f, 0.05f, 0.22f));
 
-            glm::vec2 skipSz = textRenderer.getTextSize("Skip Story", 0.82f);
-            glm::vec2 viewSz = textRenderer.getTextSize("View Story", 0.82f);
-            textRenderer.renderText("Skip Story",
+            std::string skipText = Localization::t(TextId::SkipStory);
+            std::string viewText = Localization::t(TextId::ViewStory);
+            glm::vec2 skipSz = textRenderer.getTextSize(skipText, 0.82f);
+            glm::vec2 viewSz = textRenderer.getTextSize(viewText, 0.82f);
+            textRenderer.renderText(skipText,
                 btnX + (btnW - skipSz.x) / 2.0f,
                 skipY + (btnH - skipSz.y) / 2.0f - 18.0f,
                 0.82f, glm::vec3(0.98f, 0.94f, 0.86f));
-            textRenderer.renderText("View Story",
+            textRenderer.renderText(viewText,
                 btnX + (btnW - viewSz.x) / 2.0f,
                 viewY + (btnH - viewSz.y) / 2.0f - 18.0f,
                 0.82f, glm::vec3(0.98f, 0.94f, 0.86f));
@@ -741,17 +814,17 @@ int main() {
             };
 
             std::vector<CreditLine> lines = {
-                {"CREDITS", 1.18f, glm::vec3(0.97f, 0.92f, 0.79f), 0.00f},
+                {Localization::t(TextId::CreditsTitle), 1.18f, glm::vec3(0.97f, 0.92f, 0.79f), 0.00f},
                 {"SmallDream", 0.68f, glm::vec3(0.78f, 0.84f, 0.92f), 0.04f},
-                {"Team", 0.82f, glm::vec3(0.92f, 0.90f, 0.85f), 0.08f},          
+                {Localization::t(TextId::CreditsTeam), 0.82f, glm::vec3(0.92f, 0.90f, 0.85f), 0.08f},          
                 {"Torres Guadamuz Miguel Angel", 0.58f, glm::vec3(0.92f, 0.92f, 0.90f), 0.15f},
                 {"Torrez Urbina Kevin Gael", 0.58f, glm::vec3(0.92f, 0.92f, 0.90f), 0.21f},        
                 {"Ch\u00e1vez Martinez Kevin Fernando", 0.58f, glm::vec3(0.92f, 0.92f, 0.90f), 0.27f},
-                {"Program", 0.82f, glm::vec3(0.92f, 0.90f, 0.85f), 0.30f},
-                {"National University of Engineering (UNI)", 0.58f, glm::vec3(0.84f), 0.33f},
-                {"Computer Engineering", 0.58f, glm::vec3(0.84f), 0.36f},
-                {"Graphic Programming course project", 0.54f, glm::vec3(0.80f), 0.39f},
-                {"Thank you for playing", 0.50f, glm::vec3(0.80f, 0.76f, 0.66f), 0.42f}
+                {Localization::t(TextId::CreditsProgram), 0.82f, glm::vec3(0.92f, 0.90f, 0.85f), 0.30f},
+                {Localization::t(TextId::CreditsUniversity), 0.58f, glm::vec3(0.84f), 0.33f},
+                {Localization::t(TextId::CreditsDegree), 0.58f, glm::vec3(0.84f), 0.36f},
+                {Localization::t(TextId::CreditsCourseProject), 0.54f, glm::vec3(0.80f), 0.39f},
+                {Localization::t(TextId::CreditsThanks), 0.50f, glm::vec3(0.80f, 0.76f, 0.66f), 0.42f}
             };
 
             float startY = WINDOW_HEIGHT + 140.0f;
@@ -782,7 +855,7 @@ int main() {
             renderSprite(quadVAO, spriteShader, *glowTex, proj,
                          backX, backY, backW, backH,
                          glm::vec4(0.20f, 0.17f, 0.14f, 0.55f * creditsAlpha));
-            creditsTextRenderer.renderText("Click or press ESC to go back", backX + 18.0f, backY + 13.0f, 0.40f, glm::vec3(0.92f, 0.88f, 0.80f), creditsAlpha);
+            creditsTextRenderer.renderText(Localization::t(TextId::CreditsBackHint), backX + 18.0f, backY + 13.0f, 0.40f, glm::vec3(0.92f, 0.88f, 0.80f), creditsAlpha);
         } else if (state == AppState::Controls) {
             glDisable(GL_DEPTH_TEST);
             bgShader.use();
@@ -807,8 +880,9 @@ int main() {
                          glm::vec4(0.08f, 0.08f, 0.10f, 0.60f));
 
             float startY = cy - 195.0f;
-            glm::vec2 titleSz = creditsTextRenderer.getTextSize("CONTROLS", 1.0f);
-            creditsTextRenderer.renderText("CONTROLS", cx - titleSz.x * 0.5f, startY, 1.0f, glm::vec3(0.97f, 0.92f, 0.79f));
+            std::string controlsTitle = Localization::t(TextId::ControlsTitle);
+            glm::vec2 titleSz = creditsTextRenderer.getTextSize(controlsTitle, 1.0f);
+            creditsTextRenderer.renderText(controlsTitle, cx - titleSz.x * 0.5f, startY, 1.0f, glm::vec3(0.97f, 0.92f, 0.79f));
 
             float keySize = 68.0f;
             float wasdY = startY + 65.0f;
@@ -819,25 +893,28 @@ int main() {
             renderSprite(quadVAO, spriteShader, *keyD, proj, cx + keyGap - keySize * 0.5f, wasdY + keyGap, keySize, keySize, glm::vec4(1.0f));
 
             float wasdLabelY = wasdY + keyGap + keySize + 12.0f;
-            glm::vec2 wasdLabelSz = textRenderer.getTextSize("Walk / Strafe", 0.55f);
-            textRenderer.renderText("Walk / Strafe", cx - wasdLabelSz.x * 0.5f, wasdLabelY, 0.55f, glm::vec3(0.92f, 0.88f, 0.80f));
+            std::string walkStrafe = Localization::t(TextId::ControlsWalkStrafe);
+            glm::vec2 wasdLabelSz = textRenderer.getTextSize(walkStrafe, 0.55f);
+            textRenderer.renderText(walkStrafe, cx - wasdLabelSz.x * 0.5f, wasdLabelY, 0.55f, glm::vec3(0.92f, 0.88f, 0.80f));
 
             float mouseY = wasdLabelY + 40.0f;
             float mouseW = 110.0f;
             float mouseH = 74.0f;
             renderSprite(quadVAO, spriteShader, *keyMouse, proj, cx - mouseW * 0.5f, mouseY, mouseW, mouseH, glm::vec4(1.0f));
-            glm::vec2 mouseLabelSz = textRenderer.getTextSize("Look around", 0.55f);
-            textRenderer.renderText("Look around", cx - mouseLabelSz.x * 0.5f, mouseY + mouseH + 8.0f, 0.55f, glm::vec3(0.92f, 0.88f, 0.80f));
+            std::string lookAround = Localization::t(TextId::ControlsLookAround);
+            glm::vec2 mouseLabelSz = textRenderer.getTextSize(lookAround, 0.55f);
+            textRenderer.renderText(lookAround, cx - mouseLabelSz.x * 0.5f, mouseY + mouseH + 8.0f, 0.55f, glm::vec3(0.92f, 0.88f, 0.80f));
 
             float spaceY = mouseY + mouseH + 50.0f;
             float spaceW = 260.0f;
             float spaceH = 56.0f;
             renderSprite(quadVAO, spriteShader, *keySpace, proj, cx - spaceW * 0.5f, spaceY, spaceW, spaceH, glm::vec4(1.0f));
-            glm::vec2 spaceLabelSz = textRenderer.getTextSize("Jump", 0.55f);
-            textRenderer.renderText("Jump", cx - spaceLabelSz.x * 0.5f, spaceY + spaceH + 8.0f, 0.55f, glm::vec3(0.92f, 0.88f, 0.80f));
+            std::string jumpText = Localization::t(TextId::ControlsJump);
+            glm::vec2 spaceLabelSz = textRenderer.getTextSize(jumpText, 0.55f);
+            textRenderer.renderText(jumpText, cx - spaceLabelSz.x * 0.5f, spaceY + spaceH + 8.0f, 0.55f, glm::vec3(0.92f, 0.88f, 0.80f));
 
 
-            creditsTextRenderer.renderText("Click anywhere to go back",
+            creditsTextRenderer.renderText(Localization::t(TextId::ControlsBackHint),
                 20.0f, WINDOW_HEIGHT - 40.0f, 0.40f, glm::vec3(0.80f, 0.76f, 0.66f));
         } else if (state == AppState::CloudTransition) {
             // Generate mosaic tiles on first frame
@@ -1007,7 +1084,11 @@ int main() {
             renderSprite(quadVAO, spriteShader, *loadingBarTex, proj,
                          barX, barY, barW * p, barH,
                          glm::vec4(0.82f, 0.74f, 0.55f, 0.95f));
-            textRenderer.renderText("Preparing scene...", (WINDOW_WIDTH - 240.0f) / 2.0f, barY - 36.0f, 0.5f, glm::vec3(0.95f));
+            {
+                std::string prepText = Localization::t(TextId::HousePreparingScene);
+                glm::vec2 prepSz = textRenderer.getTextSize(prepText, 0.5f);
+                textRenderer.renderText(prepText, (WINDOW_WIDTH - prepSz.x) / 2.0f, barY - 36.0f, 0.5f, glm::vec3(0.95f));
+            }
 
             if (p >= 1.0f) {
                 state = AppState::HouseWalk;
@@ -1096,8 +1177,8 @@ int main() {
             if (houseLoaded) houseModel.draw(modelShader);
             else {
                 glDisable(GL_DEPTH_TEST);
-                textRenderer.renderText("Failed to load house model", 40.0f, 40.0f, 0.6f, glm::vec3(1.0f, 0.6f, 0.6f));
-                textRenderer.renderText(houseModel.lastError(), 40.0f, 80.0f, 0.4f, glm::vec3(1.0f, 0.8f, 0.8f));
+                textRenderer.renderText(Localization::t(TextId::HouseFailedLoad), 40.0f, 40.0f, 0.6f, glm::vec3(1.0f, 0.6f, 0.6f));
+                textRenderer.renderText(Localization::t(TextId::HouseFailedError) + ": " + houseModel.lastError(), 40.0f, 80.0f, 0.4f, glm::vec3(1.0f, 0.8f, 0.8f));
             }
         } else if (state == AppState::DreamLoading) {
             dreamLoadingTimer += dt;
@@ -1181,6 +1262,49 @@ int main() {
                 gCreditsPauseStarted = 0.0;
                 gCreditsPauseAccum = 0.0;
             }
+        } else if (state == AppState::Pause) {
+            glDisable(GL_DEPTH_TEST);
+
+            renderSprite(quadVAO, spriteShader, *loadingBarTex, proj,
+                         0.0f, 0.0f, (float)WINDOW_WIDTH, (float)WINDOW_HEIGHT,
+                         glm::vec4(0.0f, 0.0f, 0.0f, 0.72f));
+
+            std::string pauseTitle = Localization::t(TextId::PauseTitle);
+            glm::vec2 pauseTitleSz = textRenderer.getTextSize(pauseTitle, 0.95f);
+            textRenderer.renderText(pauseTitle, (WINDOW_WIDTH - pauseTitleSz.x) / 2.0f, WINDOW_HEIGHT * 0.22f,
+                                     0.95f, glm::vec3(0.98f, 0.94f, 0.86f));
+
+            float btnW = 460.0f;
+            float btnH = 74.0f;
+            float btnX = (WINDOW_WIDTH - btnW) / 2.0f;
+            float resumeY = WINDOW_HEIGHT * 0.42f;
+            float menuY = WINDOW_HEIGHT * 0.56f;
+
+            auto drawPauseButton = [&](const std::string& label, float y) {
+                bool hovered = pointInRect(mx, my, btnX, y, btnW, btnH);
+                glm::vec4 bg = hovered ? glm::vec4(0.20f, 0.18f, 0.15f, 0.92f) : glm::vec4(0.12f, 0.11f, 0.10f, 0.88f);
+                glm::vec4 inner = hovered ? glm::vec4(0.04f, 0.04f, 0.05f, 0.30f) : glm::vec4(0.04f, 0.04f, 0.05f, 0.18f);
+                renderSprite(quadVAO, spriteShader, *underlineTex, proj, btnX, y, btnW, btnH, bg);
+                renderSprite(quadVAO, spriteShader, *underlineTex, proj, btnX + 6.0f, y + 6.0f, btnW - 12.0f, btnH - 12.0f, inner);
+                glm::vec2 labelSz = textRenderer.getTextSize(label, 0.75f);
+                textRenderer.renderText(label, btnX + (btnW - labelSz.x) / 2.0f, y + (btnH - labelSz.y) / 2.0f - 16.0f,
+                                        0.75f, glm::vec3(0.98f, 0.94f, 0.86f));
+                return hovered;
+            };
+
+            bool resumeHovered = drawPauseButton(Localization::t(TextId::PauseResume), resumeY);
+            bool menuHovered = drawPauseButton(Localization::t(TextId::PauseReturnMenu), menuY);
+
+            if (mouseJustPressed) {
+                if (resumeHovered) {
+                    state = gPauseReturnState;
+                    if (state == AppState::HouseWalk) {
+                        gHouseCapturedMouse = false;
+                    }
+                } else if (menuHovered) {
+                    returnToMenuFromPause();
+                }
+            }
         } else if (state == AppState::DreamState) {
             // Render just the logo and a centered message
             float lw = (float)logoTex.getWidth();
@@ -1189,7 +1313,7 @@ int main() {
             float ly = WINDOW_HEIGHT * 0.22f;
             renderSprite(quadVAO, spriteShader, logoTex, proj, lx, ly, lw, lh, glm::vec4(1.0f));
 
-            textRenderer.renderText("NEW DREAM",
+            textRenderer.renderText(Localization::t(TextId::MenuNewDream),
                 (WINDOW_WIDTH - 200.0f) / 2.0f, WINDOW_HEIGHT / 2.0f + 50.0f,
                 0.6f, glm::vec3(1.0f, 0.95f, 0.8f));
         }
@@ -1197,6 +1321,8 @@ int main() {
         glfwSwapBuffers(gWindow);
         glfwPollEvents();
     }
+
+    Localization::save("language.cfg");
 
     delete skyboxTex;
     for (auto* t : cloudFrames) delete t;

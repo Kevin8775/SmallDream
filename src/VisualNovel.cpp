@@ -2,6 +2,7 @@
 #include "Texture.h"
 #include "TextRenderer.h"
 #include "Shader.h"
+#include "Localization.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <miniaudio.h>
 
@@ -11,6 +12,51 @@ static const float TEXT_PADDING_Y = 20.0f;
 static const float BOX_BOTTOM_MARGIN = 10.0f;
 static const float DIALOG_TEXT_SCALE = 0.55f;
 static const float TRANSITION_DURATION = 1.0f;
+
+static size_t utf8Length(const std::string& text) {
+    size_t count = 0;
+    const unsigned char* ptr = reinterpret_cast<const unsigned char*>(text.data());
+    const unsigned char* end = ptr + text.size();
+    while (ptr < end) {
+        unsigned char c = *ptr++;
+        if (c < 0x80) {
+            count++;
+        } else if ((c & 0xE0) == 0xC0 && ptr < end) {
+            ptr += 1;
+            count++;
+        } else if ((c & 0xF0) == 0xE0 && ptr + 1 < end) {
+            ptr += 2;
+            count++;
+        } else if ((c & 0xF8) == 0xF0 && ptr + 2 < end) {
+            ptr += 3;
+            count++;
+        } else {
+            break;
+        }
+    }
+    return count;
+}
+
+static std::string utf8Prefix(const std::string& text, size_t chars) {
+    size_t pos = 0;
+    size_t count = 0;
+    const unsigned char* ptr = reinterpret_cast<const unsigned char*>(text.data());
+    const unsigned char* end = ptr + text.size();
+    while (ptr < end && count < chars) {
+        unsigned char c = *ptr;
+        size_t step = 1;
+        if (c < 0x80) step = 1;
+        else if ((c & 0xE0) == 0xC0) step = 2;
+        else if ((c & 0xF0) == 0xE0) step = 3;
+        else if ((c & 0xF8) == 0xF0) step = 4;
+        else break;
+        if (ptr + step > end) break;
+        ptr += step;
+        pos += step;
+        count++;
+    }
+    return text.substr(0, pos);
+}
 
 VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
                          GLuint quadVAO, const glm::mat4& proj,
@@ -46,101 +92,100 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     mDialogBox = new Texture("assets/textures/caja_dialogo.png");
     calcLayout();
 
-    auto addLine = [&](const std::string& text, const std::string& sound = "", bool wait = false) {
-        mScenes.back().lines.push_back({text, sound, wait});
+    auto addLine = [&](TextId textId, const std::string& sound = "", bool wait = false) {
+        mScenes.back().lines.push_back({textId, sound, wait});
     };
 
     // Scene 0: Office
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/oficina.png";
-    addLine("Another day in front of the same screen.");
-    addLine("The same keys.");
-    addLine("The same hallways.");
-    addLine("The same lights that never seemed to go out.");
-    addLine("I looked at the clock.");
-    addLine("22:47.");
-    addLine("It was already late.");
-    addLine("I saved the last files.");
-    addLine("I turned off the screen.");
-    addLine("And I finally got up.");
-    addLine("*I push the chair back.*", "assets/sounds/ui/arrastrar_silla.mp3", true);
-    addLine("*I grab my backpack.*", "assets/sounds/ui/mochila.mp3", true);
-    addLine("...and I head home.");
+    addLine(TextId::VN_S0_0);
+    addLine(TextId::VN_S0_1);
+    addLine(TextId::VN_S0_2);
+    addLine(TextId::VN_S0_3);
+    addLine(TextId::VN_S0_4);
+    addLine(TextId::VN_S0_5);
+    addLine(TextId::VN_S0_6);
+    addLine(TextId::VN_S0_7);
+    addLine(TextId::VN_S0_8);
+    addLine(TextId::VN_S0_9);
+    addLine(TextId::VN_S0_10, "assets/sounds/ui/arrastrar_silla.mp3", true);
+    addLine(TextId::VN_S0_11, "assets/sounds/ui/mochila.mp3", true);
+    addLine(TextId::VN_S0_12);
 
     // Scene 1: Office building (exterior)
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/empresa.png";
-    addLine("*The glass doors slide open slowly.*", "assets/sounds/ui/puerta_vidrio.mp3");
-    addLine("*A stream of fresh air hits my face.*");
-    addLine("Much better.");
-    addLine("*I start walking down the street.*", "assets/sounds/ui/pasos_2.mp3");
-    addLine("I just wanted to get home.");
-    addLine("Nothing else.");
+    addLine(TextId::VN_S1_0, "assets/sounds/ui/puerta_vidrio.mp3");
+    addLine(TextId::VN_S1_1);
+    addLine(TextId::VN_S1_2);
+    addLine(TextId::VN_S1_3, "assets/sounds/ui/pasos_2.mp3");
+    addLine(TextId::VN_S1_4);
+    addLine(TextId::VN_S1_5);
 
     // Scene 2: Street
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/calle.png";
     mScenes.back().ambientSound = "assets/sounds/ui/viento.mp3";
-    addLine("*The streetlights warm the sidewalk with a soft glow.*");
-    addLine("*The city seems quieter than usual.*");
-    addLine("So quiet...");
-    addLine("*I keep walking.*", "assets/sounds/ui/pasos_2.mp3");
-    addLine("*The sound of my footsteps echoes in the empty street.*", "assets/sounds/ui/pasos_2.mp3");
-    addLine("I guess it's already pretty late.");
-    addLine("*I look up at the night sky.*");
-    addLine("I don't remember the last time I was out this late.");
-    addLine("*A cold breeze sweeps through the street.*");
-    addLine("I just want to get home.");
-    addLine("Get some rest.");
-    addLine("*The silhouette of my house appears at the end of the street.*");
+    addLine(TextId::VN_S2_0);
+    addLine(TextId::VN_S2_1);
+    addLine(TextId::VN_S2_2);
+    addLine(TextId::VN_S2_3, "assets/sounds/ui/pasos_2.mp3");
+    addLine(TextId::VN_S2_4, "assets/sounds/ui/pasos_2.mp3");
+    addLine(TextId::VN_S2_5);
+    addLine(TextId::VN_S2_6);
+    addLine(TextId::VN_S2_7);
+    addLine(TextId::VN_S2_8);
+    addLine(TextId::VN_S2_9);
+    addLine(TextId::VN_S2_10);
+    addLine(TextId::VN_S2_11);
 
     // Scene 3: Home
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa.png";
-    addLine("*I open the door and step inside.*", "assets/sounds/ui/puerta_casa.mp3", true);
-    addLine("*Silence greets me at once.*");
-    addLine("*I leave the keys on the table.*", "assets/sounds/ui/llaves.mp3", true);
-    addLine("*The living room lamp casts a gentle light across the room.*");
-    addLine("Home.");
-    addLine("*I drop my backpack on the floor.*", "assets/sounds/ui/mochila.mp3", true);
-    addLine("*My shoulders feel lighter.*");
-    addLine("At last.");
-    addLine("*I take in the room for a few seconds.*");
-    addLine("I never thought such a simple place could feel this good.");
-    addLine("*I walk slowly toward the couch.*");
-    addLine("I just need to rest a little.");
+    addLine(TextId::VN_S3_0, "assets/sounds/ui/puerta_casa.mp3", true);
+    addLine(TextId::VN_S3_1);
+    addLine(TextId::VN_S3_2, "assets/sounds/ui/llaves.mp3", true);
+    addLine(TextId::VN_S3_3);
+    addLine(TextId::VN_S3_4);
+    addLine(TextId::VN_S3_5, "assets/sounds/ui/mochila.mp3", true);
+    addLine(TextId::VN_S3_6);
+    addLine(TextId::VN_S3_7);
+    addLine(TextId::VN_S3_8);
+    addLine(TextId::VN_S3_9);
+    addLine(TextId::VN_S3_10);
+    addLine(TextId::VN_S3_11);
 
     // Scene 4: Living room (couch)
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa_por_dentro.png";
-    addLine("*I let myself fall onto the couch.*");
-    addLine("*The exhaustion of the day hits me all at once.*");
-    addLine("Ah...");
-    addLine("*I rest my head back.*");
-    addLine("*I close my eyes for a moment.*");
-    addLine("Just a few minutes.");
-    addLine("Then I'll get up.");
-    addLine("*I take a deep breath.*");
-    addLine("That's what I always told myself.");
-    addLine("*Silence fills the room.*");
-    addLine("*Little by little, everything begins to fade away.*");
+    addLine(TextId::VN_S4_0);
+    addLine(TextId::VN_S4_1);
+    addLine(TextId::VN_S4_2);
+    addLine(TextId::VN_S4_3);
+    addLine(TextId::VN_S4_4);
+    addLine(TextId::VN_S4_5);
+    addLine(TextId::VN_S4_6);
+    addLine(TextId::VN_S4_7);
+    addLine(TextId::VN_S4_8);
+    addLine(TextId::VN_S4_9);
 
     // Scene 5: Dark / blurry house
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa_oscura.png";
-    addLine("...");
-    addLine("...");
-    addLine("*The room feels strangely silent.*");
-    addLine("...");
-    addLine("*For a moment, everything feels distant.*");
-    addLine("...");
+    addLine(TextId::VN_S5_0);
+    addLine(TextId::VN_S5_1);
+    addLine(TextId::VN_S5_2);
+    addLine(TextId::VN_S5_3);
+    addLine(TextId::VN_S5_4);
+    addLine(TextId::VN_S5_5);
 
     // Scene 6: Black
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/negro.png";
-    addLine("...");
-    addLine("...");
-    addLine("...?");
+    addLine(TextId::VN_S6_0);
+    addLine(TextId::VN_S6_1);
+    addLine(TextId::VN_S6_2);
 
     mBackground = new Texture(mScenes[0].bgPath);
 }
@@ -273,11 +318,13 @@ void VisualNovel::update(float dt, bool mouseJustPressed) {
 
     if (!mLineFinished) {
         mCharTimer += dt;
-        while (mCharTimer >= mCharInterval && mCharIndex < (int)mScenes[mCurrentScene].lines[mCurrentLine].text.size()) {
+        std::string currentText = Localization::t(mScenes[mCurrentScene].lines[mCurrentLine].textId);
+        int currentLength = (int)utf8Length(currentText);
+        while (mCharTimer >= mCharInterval && mCharIndex < currentLength) {
             mCharTimer -= mCharInterval;
             mCharIndex++;
         }
-        if (mCharIndex >= (int)mScenes[mCurrentScene].lines[mCurrentLine].text.size()) {
+        if (mCharIndex >= currentLength) {
             mLineFinished = true;
             const auto& line = mScenes[mCurrentScene].lines[mCurrentLine];
             if (!line.soundPath.empty()) {
@@ -380,7 +427,7 @@ void VisualNovel::render() {
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
     const auto& line = mScenes[mCurrentScene].lines[mCurrentLine];
-    std::string visible = line.text.substr(0, mCharIndex);
+    std::string visible = utf8Prefix(Localization::t(line.textId), (size_t)mCharIndex);
     mTextRenderer->renderText(visible, mTextX, mTextY, DIALOG_TEXT_SCALE, glm::vec3(1.0f, 1.0f, 1.0f));
 }
 
