@@ -448,7 +448,7 @@ int main() {
         glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
         glm::vec3 centerW = (minW + maxW) * 0.5f;
         float houseFloorY = minW.y + (maxW.y - minW.y) * 0.40f;
-        camPos = housePos + glm::vec3(centerW.x, houseFloorY + eyeHeight, centerW.z);
+        camPos = housePos + glm::vec3(-24.084934f, -4.044464f, 7.700874f);
         camFront = glm::normalize((housePos + centerW) - camPos);
         camYaw = -90.0f;
         camPitch = 0.0f;
@@ -1180,6 +1180,11 @@ int main() {
                 textRenderer.renderText(Localization::t(TextId::HouseFailedLoad), 40.0f, 40.0f, 0.6f, glm::vec3(1.0f, 0.6f, 0.6f));
                 textRenderer.renderText(Localization::t(TextId::HouseFailedError) + ": " + houseModel.lastError(), 40.0f, 80.0f, 0.4f, glm::vec3(1.0f, 0.8f, 0.8f));
             }
+            glDisable(GL_DEPTH_TEST);
+            textRenderer.renderText(
+                "POS: " + std::to_string(camPos.x) + ", " + std::to_string(camPos.y) + ", " + std::to_string(camPos.z),
+                20.0f, 20.0f, 0.45f, glm::vec3(0.2f, 1.0f, 0.2f)
+            );
         } else if (state == AppState::DreamLoading) {
             dreamLoadingTimer += dt;
 
