@@ -67,6 +67,7 @@ bool Model::load(const std::string& path) {
         }
 
         ModelMesh m;
+        m.vertices = vertices;
         m.indices = indices;
         m.indexCount = indices.size();
         glGenVertexArrays(1, &m.vao);

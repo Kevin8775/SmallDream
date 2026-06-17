@@ -21,6 +21,7 @@
 #include "CubemapTexture.h"
 #include "VisualNovel.h"
 #include "Model.h"
+#include "MeshCollider.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -63,6 +64,7 @@ static double gCreditsPauseStarted = 0.0;
 static double gCreditsPauseAccum = 0.0;
 static bool gStoryCloudOnly = false;
 static bool gHouseCapturedMouse = false;
+static bool gShowCollisionDebug = false;
 
 static bool pointInRect(double x, double y, float rx, float ry, float rw, float rh) {
     return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
@@ -287,6 +289,9 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
         }
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+    if (key == GLFW_KEY_B && action == GLFW_PRESS && gStatePtr && *gStatePtr == AppState::HouseWalk) {
+        gShowCollisionDebug = !gShowCollisionDebug;
+    }
 }
 
 int main() {
@@ -414,14 +419,41 @@ int main() {
     const float houseTargetSize = 120.0f;
     float houseVerticalVelocity = 0.0f;
 
-    const float eyeHeight = 2.0f;
-    auto placeCameraInsideHouse = [&]() {
-        glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
-        glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
-        glm::vec3 centerW = (minW + maxW) * 0.5f;
-        float houseFloorY = minW.y + (maxW.y - minW.y) * 0.40f;
-        camPos = housePos + glm::vec3(centerW.x, houseFloorY + eyeHeight, centerW.z);
-        camFront = glm::normalize((housePos + centerW) - camPos);
+    const float eyeHeight = 1.5f;
+    const float playerRadius = 0.3f;
+    MeshCollider bedroomCollider;
+
+    // Transform: V_world = housePos + scale * V_model - center
+    // For the model to be centered at origin, housePos must be (1 - scale) * center
+    auto computeHousePos = [&]() {
+        housePos = (1.0f - houseModelScale) * houseCenter;
+    };
+
+    auto buildColliderTransform = [&]() -> glm::mat4 {
+        return glm::translate(glm::mat4(1.0f), housePos)
+             * glm::translate(glm::mat4(1.0f), -houseCenter)
+             * glm::scale(glm::mat4(1.0f), glm::vec3(houseModelScale));
+    };
+
+    auto placeCameraInsideBedroom = [&]() {
+        glm::vec3 minW = housePos + houseModelScale * houseMin - houseCenter;
+        glm::vec3 maxW = housePos + houseModelScale * houseMax - houseCenter;
+        float roughFloorY = minW.y + (maxW.y - minW.y) * 0.05f;
+        float floorY = roughFloorY;
+        if (bedroomCollider.isBuilt()) {
+            float sampleOffsets[] = {-20.0f, -10.0f, -5.0f, 0.0f, 5.0f, 10.0f, 20.0f};
+            for (float dx : sampleOffsets) {
+                for (float dz : sampleOffsets) {
+                    // Start ray from inside room (below ceiling) so first hit is the floor surface
+                    float startY = minW.y + (maxW.y - minW.y) * 0.8f;
+                    float f = bedroomCollider.getFloorHeight(
+                        glm::vec3(dx, startY, dz));
+                    if (f > floorY) floorY = f;
+                }
+            }
+        }
+        if (floorY <= roughFloorY - 1.0f || floorY > maxW.y) floorY = roughFloorY;
+        camPos = glm::vec3(0.0f, floorY + eyeHeight, 0.0f);
         camYaw = -90.0f;
         camPitch = 0.0f;
         firstMouse = true;
@@ -971,15 +1003,27 @@ int main() {
             if (!houseLoadingStarted) {
                 houseLoadingStarted = true;
                 houseLoadingTimer = 0.0f;
-                houseLoaded = houseModel.load("assets/models/house/scene.gltf");
-                houseMin = houseModel.boundsMin();
-                houseMax = houseModel.boundsMax();
+                bedroomCollider.destroy();
+                houseLoaded = houseModel.load("assets/models/bedroom/scene.gltf");
                 if (houseLoaded) {
+                    houseMin = houseModel.boundsMin();
+                    houseMax = houseModel.boundsMax();
                     houseCenter = (houseMin + houseMax) * 0.5f;
                     glm::vec3 size = houseMax - houseMin;
                     float biggest = std::max(size.x, std::max(size.y, size.z));
                     houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
-                    placeCameraInsideHouse();
+                    computeHousePos();
+                    bedroomCollider.addModel(houseModel, buildColliderTransform());
+                    // Wide collision floor at model-floor level
+                    {
+                        glm::vec3 minW = housePos + houseModelScale * houseMin - houseCenter;
+                        glm::vec3 maxW = housePos + houseModelScale * houseMax - houseCenter;
+                        float floorY = minW.y + (maxW.y - minW.y) * 0.05f;
+                        float margin = 50.0f;
+                        bedroomCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
+                    }
+                    bedroomCollider.build();
+                    placeCameraInsideBedroom();
                 }
             }
 
@@ -1015,15 +1059,26 @@ int main() {
             }
         } else if (state == AppState::HouseWalk) {
             if (!houseLoaded) {
-                houseLoaded = houseModel.load("assets/models/house/scene.gltf");
-                houseMin = houseModel.boundsMin();
-                houseMax = houseModel.boundsMax();
+                bedroomCollider.destroy();
+                houseLoaded = houseModel.load("assets/models/bedroom/scene.gltf");
                 if (houseLoaded) {
+                    houseMin = houseModel.boundsMin();
+                    houseMax = houseModel.boundsMax();
                     houseCenter = (houseMin + houseMax) * 0.5f;
                     glm::vec3 size = houseMax - houseMin;
                     float biggest = std::max(size.x, std::max(size.y, size.z));
                     houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
-                    placeCameraInsideHouse();
+                    computeHousePos();
+                    bedroomCollider.addModel(houseModel, buildColliderTransform());
+                    {
+                        glm::vec3 minW = housePos + houseModelScale * houseMin - houseCenter;
+                        glm::vec3 maxW = housePos + houseModelScale * houseMax - houseCenter;
+                        float floorY = minW.y + (maxW.y - minW.y) * 0.05f;
+                        float margin = 50.0f;
+                        bedroomCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
+                    }
+                    bedroomCollider.build();
+                    placeCameraInsideBedroom();
                 }
             }
             if (!gHouseCapturedMouse) {
@@ -1048,29 +1103,53 @@ int main() {
             camFront = glm::normalize(front);
             glm::vec3 right = glm::normalize(glm::cross(camFront, camUp));
             float speed = 7.5f * dt;
-            glm::vec3 next = camPos;
-            if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) next += camFront * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) next -= camFront * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) next -= right * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) next += right * speed;
-            glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
-            glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
-            float floorY = minW.y + (maxW.y - minW.y) * 0.40f;
-            bool grounded = camPos.y <= floorY + eyeHeight + 0.02f;
+
+            // Desired horizontal movement
+            glm::vec3 move(0.0f);
+            if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) move += camFront * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) move -= camFront * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) move -= right * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) move += right * speed;
+
+            // Gravity
+            houseVerticalVelocity -= 9.8f * dt;
+            move.y = houseVerticalVelocity * dt;
+
+            // Floor detection at current XZ position
+            float floorY = camPos.y - 100.0f;
+            if (bedroomCollider.isBuilt()) {
+                float f = bedroomCollider.getFloorHeight(
+                    camPos + glm::vec3(0.0f, eyeHeight + 0.5f, 0.0f));
+                if (f > camPos.y - 100.0f) floorY = f;
+            }
+
+            // Apply movement with collision sliding
+            glm::vec3 nextPos = camPos + move;
+            if (bedroomCollider.isBuilt()) {
+                for (int iter = 0; iter < 2; ++iter) {
+                    glm::vec3 normal;
+                    float penetration;
+                    if (bedroomCollider.collideSphere(nextPos, playerRadius, normal, penetration)) {
+                        nextPos += normal * (penetration + 0.001f);
+                        glm::vec3 vel = nextPos - camPos;
+                        vel = vel - glm::dot(vel, normal) * normal;
+                        nextPos = camPos + vel;
+                    } else break;
+                }
+            }
+
+            // Floor constraint
+            float footY = nextPos.y - eyeHeight;
+            bool grounded = footY <= floorY + 0.02f && (floorY - footY) < 1.0f;
             if (grounded) {
-                camPos.y = floorY + eyeHeight;
+                nextPos.y = floorY + eyeHeight;
                 houseVerticalVelocity = 0.0f;
                 if (glfwGetKey(gWindow, GLFW_KEY_SPACE) == GLFW_PRESS) {
                     houseVerticalVelocity = 5.0f;
                 }
             }
-            houseVerticalVelocity -= 9.8f * dt;
-            next.y = camPos.y + houseVerticalVelocity * dt;
-            if (next.y < floorY + eyeHeight) {
-                next.y = floorY + eyeHeight;
-                houseVerticalVelocity = 0.0f;
-            }
-            camPos = next;
+
+            camPos = nextPos;
             glDisable(GL_CULL_FACE);
             glEnable(GL_DEPTH_TEST);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1093,10 +1172,15 @@ int main() {
             modelShader.setFloat("uFillLightIntensity", 0.5f);
             modelShader.setFloat("uShininess", 24.0f);
             modelShader.setFloat("uSpecIntensity", 0.25f);
-            if (houseLoaded) houseModel.draw(modelShader);
-            else {
+            if (houseLoaded) {
+                houseModel.draw(modelShader);
+                if (gShowCollisionDebug) {
+                    glEnable(GL_DEPTH_TEST);
+                    bedroomCollider.drawDebug(modelShader, view, projection);
+                }
+            } else {
                 glDisable(GL_DEPTH_TEST);
-                textRenderer.renderText("Failed to load house model", 40.0f, 40.0f, 0.6f, glm::vec3(1.0f, 0.6f, 0.6f));
+                textRenderer.renderText("Failed to load model", 40.0f, 40.0f, 0.6f, glm::vec3(1.0f, 0.6f, 0.6f));
                 textRenderer.renderText(houseModel.lastError(), 40.0f, 80.0f, 0.4f, glm::vec3(1.0f, 0.8f, 0.8f));
             }
         } else if (state == AppState::DreamLoading) {
