@@ -21,24 +21,48 @@
     <ClCompile Include="src\Texture.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\CubemapTexture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\TextRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\Menu.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\VisualNovel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Model.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\MeshCollider.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\Shader.h">
+    <ClInclude Include="src\include\Shader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Texture.h">
+    <ClInclude Include="src\include\Texture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\TextRenderer.h">
+    <ClInclude Include="src\include\CubemapTexture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Menu.h">
+    <ClInclude Include="src\include\TextRenderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\include\Menu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\include\VisualNovel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\include\Model.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\include\MeshCollider.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -59,6 +83,18 @@
       <Filter>Shader Files</Filter>
     </None>
     <None Include="assets\shaders\text.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="assets\shaders\skybox.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="assets\shaders\skybox.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="assets\shaders\model.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="assets\shaders\model.frag">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

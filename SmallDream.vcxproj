@@ -46,6 +46,7 @@
     <ClCompile Include="src\Menu.cpp" />
     <ClCompile Include="src\VisualNovel.cpp" />
     <ClCompile Include="src\Model.cpp" />
+    <ClCompile Include="src\MeshCollider.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\include\Shader.h" />
@@ -55,6 +56,7 @@
     <ClInclude Include="src\include\Menu.h" />
     <ClInclude Include="src\include\VisualNovel.h" />
     <ClInclude Include="src\include\Model.h" />
+    <ClInclude Include="src\include\MeshCollider.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\shaders\background.vert" />
