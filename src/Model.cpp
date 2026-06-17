@@ -28,6 +28,8 @@ void ModelMesh::destroy() {
     if (vao) glDeleteVertexArrays(1, &vao);
     vao = vbo = ebo = 0;
     indexCount = 0;
+    vertices.clear();
+    indices.clear();
 }
 
 bool Model::load(const std::string& path) {
@@ -67,6 +69,7 @@ bool Model::load(const std::string& path) {
         }
 
         ModelMesh m;
+        m.vertices = vertices;
         m.indices = indices;
         m.indexCount = indices.size();
         glGenVertexArrays(1, &m.vao);

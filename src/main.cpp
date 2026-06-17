@@ -22,6 +22,7 @@
 #include "Localization.h"
 #include "VisualNovel.h"
 #include "Model.h"
+#include "MeshCollider.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -66,6 +67,7 @@ static double gCreditsPauseAccum = 0.0;
 static bool gStoryCloudOnly = false;
 static bool gHouseCapturedMouse = false;
 static AppState gPauseReturnState = AppState::Menu;
+static bool gShowCollisionDebug = false;
 
 static bool pointInRect(double x, double y, float rx, float ry, float rw, float rh) {
     return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
@@ -312,6 +314,9 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
         }
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+    if (key == GLFW_KEY_B && action == GLFW_PRESS && gStatePtr && *gStatePtr == AppState::HouseWalk) {
+        gShowCollisionDebug = !gShowCollisionDebug;
+    }
 }
 
 int main() {
@@ -443,6 +448,8 @@ int main() {
     float houseVerticalVelocity = 0.0f;
 
     const float eyeHeight = 2.0f;
+    const float playerRadius = 0.3f;
+    MeshCollider houseCollider;
     auto placeCameraInsideHouse = [&]() {
         glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
         glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
@@ -453,6 +460,31 @@ int main() {
         camYaw = -90.0f;
         camPitch = 0.0f;
         firstMouse = true;
+    };
+
+    auto computeHousePos = [&]() {
+        housePos = (1.0f - houseModelScale) * houseCenter;
+    };
+
+    auto buildHouseColliderTransform = [&]() -> glm::mat4 {
+        return glm::translate(glm::mat4(1.0f), housePos)
+             * glm::translate(glm::mat4(1.0f), -houseCenter)
+             * glm::scale(glm::mat4(1.0f), glm::vec3(houseModelScale));
+    };
+
+    auto rebuildHouseCollider = [&]() {
+        houseCollider.destroy();
+        if (!houseLoaded) return;
+
+        computeHousePos();
+        houseCollider.addModel(houseModel, buildHouseColliderTransform());
+
+        glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
+        glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
+        float floorY = minW.y + (maxW.y - minW.y) * 0.05f;
+        float margin = 50.0f;
+        houseCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
+        houseCollider.build();
     };
 
     // Cloud transition animation
@@ -478,6 +510,8 @@ int main() {
     float dreamBlackTimer = 0.0f;
     ma_sound tecladoSound;
     bool hasTecladoSound = false;
+    ma_sound stepsSound;
+    bool hasStepsSound = false;
     bool tecladoPlayed = false;
     bool prevMouseDown = false;
 
@@ -514,11 +548,18 @@ int main() {
         if (gPauseReturnState == AppState::HouseWalk) {
             glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             gHouseCapturedMouse = false;
+            if (hasStepsSound) {
+                ma_sound_stop(&stepsSound);
+                ma_sound_uninit(&stepsSound);
+                hasStepsSound = false;
+            }
+            houseCollider.destroy();
             houseModel.destroy();
             houseLoaded = false;
             houseLoadingStarted = false;
             houseLoadingTimer = 0.0f;
             houseVerticalVelocity = 0.0f;
+            gShowCollisionDebug = false;
             firstMouse = true;
         } else if (gPauseReturnState == AppState::VisualNovel) {
             if (visualNovel) visualNovel->reset();
@@ -1049,13 +1090,14 @@ int main() {
                 houseLoadingStarted = true;
                 houseLoadingTimer = 0.0f;
                 houseLoaded = houseModel.load("assets/models/house/scene.gltf");
-                houseMin = houseModel.boundsMin();
-                houseMax = houseModel.boundsMax();
                 if (houseLoaded) {
+                    houseMin = houseModel.boundsMin();
+                    houseMax = houseModel.boundsMax();
                     houseCenter = (houseMin + houseMax) * 0.5f;
                     glm::vec3 size = houseMax - houseMin;
                     float biggest = std::max(size.x, std::max(size.y, size.z));
                     houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
+                    rebuildHouseCollider();
                     placeCameraInsideHouse();
                 }
             }
@@ -1097,13 +1139,14 @@ int main() {
         } else if (state == AppState::HouseWalk) {
             if (!houseLoaded) {
                 houseLoaded = houseModel.load("assets/models/house/scene.gltf");
-                houseMin = houseModel.boundsMin();
-                houseMax = houseModel.boundsMax();
                 if (houseLoaded) {
+                    houseMin = houseModel.boundsMin();
+                    houseMax = houseModel.boundsMax();
                     houseCenter = (houseMin + houseMax) * 0.5f;
                     glm::vec3 size = houseMax - houseMin;
                     float biggest = std::max(size.x, std::max(size.y, size.z));
                     houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
+                    rebuildHouseCollider();
                     placeCameraInsideHouse();
                 }
             }
@@ -1128,29 +1171,65 @@ int main() {
             front.z = sin(glm::radians(camYaw)) * cos(glm::radians(camPitch));
             camFront = glm::normalize(front);
             glm::vec3 right = glm::normalize(glm::cross(camFront, camUp));
-            float speed = 7.5f * dt;
-            glm::vec3 next = camPos;
-            if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) next += camFront * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) next -= camFront * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) next -= right * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) next += right * speed;
+            bool sprinting = glfwGetKey(gWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+            float speed = 7.5f * dt * (sprinting ? 2.0f : 1.0f);
+            glm::vec3 move(0.0f);
+            if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) move += camFront * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) move -= camFront * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) move -= right * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) move += right * speed;
+
+            houseVerticalVelocity -= 9.8f * dt;
+            move.y = houseVerticalVelocity * dt;
+
             glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
             glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
             float floorY = minW.y + (maxW.y - minW.y) * 0.40f;
-            bool grounded = camPos.y <= floorY + eyeHeight + 0.02f;
+            if (houseCollider.isBuilt()) {
+                float sampledFloor = houseCollider.getFloorHeight(camPos + glm::vec3(0.0f, eyeHeight + 0.5f, 0.0f));
+                if (sampledFloor > camPos.y - 100.0f) floorY = sampledFloor;
+            }
+
+            glm::vec3 next = camPos + move;
+            if (houseCollider.isBuilt()) {
+                for (int iter = 0; iter < 2; ++iter) {
+                    glm::vec3 normal;
+                    float penetration;
+                    if (houseCollider.collideSphere(next, playerRadius, normal, penetration)) {
+                        next += normal * (penetration + 0.001f);
+                        glm::vec3 vel = next - camPos;
+                        vel = vel - glm::dot(vel, normal) * normal;
+                        next = camPos + vel;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            float footY = next.y - eyeHeight;
+            bool grounded = footY <= floorY + 0.02f && (floorY - footY) < 1.0f;
             if (grounded) {
-                camPos.y = floorY + eyeHeight;
+                next.y = floorY + eyeHeight;
                 houseVerticalVelocity = 0.0f;
                 if (glfwGetKey(gWindow, GLFW_KEY_SPACE) == GLFW_PRESS) {
                     houseVerticalVelocity = 5.0f;
                 }
             }
-            houseVerticalVelocity -= 9.8f * dt;
-            next.y = camPos.y + houseVerticalVelocity * dt;
-            if (next.y < floorY + eyeHeight) {
-                next.y = floorY + eyeHeight;
-                houseVerticalVelocity = 0.0f;
+
+            if (!hasStepsSound) {
+                hasStepsSound = ma_sound_init_from_file(&engine, "assets/sounds/effects/steps.wav", 0, nullptr, nullptr, &stepsSound) == MA_SUCCESS;
+                if (hasStepsSound) ma_sound_set_looping(&stepsSound, MA_TRUE);
             }
+            if (hasStepsSound) {
+                bool moving = move.x != 0.0f || move.z != 0.0f;
+                if (moving && grounded) {
+                    if (!ma_sound_is_playing(&stepsSound)) ma_sound_start(&stepsSound);
+                    ma_sound_set_pitch(&stepsSound, sprinting ? 1.8f : 1.0f);
+                } else if (ma_sound_is_playing(&stepsSound)) {
+                    ma_sound_stop(&stepsSound);
+                }
+            }
+
             camPos = next;
             glDisable(GL_CULL_FACE);
             glEnable(GL_DEPTH_TEST);
@@ -1174,8 +1253,13 @@ int main() {
             modelShader.setFloat("uFillLightIntensity", 0.5f);
             modelShader.setFloat("uShininess", 24.0f);
             modelShader.setFloat("uSpecIntensity", 0.25f);
-            if (houseLoaded) houseModel.draw(modelShader);
-            else {
+            if (houseLoaded) {
+                houseModel.draw(modelShader);
+                if (gShowCollisionDebug) {
+                    glEnable(GL_DEPTH_TEST);
+                    houseCollider.drawDebug(modelShader, view, projection);
+                }
+            } else {
                 glDisable(GL_DEPTH_TEST);
                 textRenderer.renderText(Localization::t(TextId::HouseFailedLoad), 40.0f, 40.0f, 0.6f, glm::vec3(1.0f, 0.6f, 0.6f));
                 textRenderer.renderText(Localization::t(TextId::HouseFailedError) + ": " + houseModel.lastError(), 40.0f, 80.0f, 0.4f, glm::vec3(1.0f, 0.8f, 0.8f));
@@ -1343,6 +1427,7 @@ int main() {
     if (hasLoadingLoop) ma_sound_uninit(&loadingLoop);
     if (hasAmbientLoop) ma_sound_uninit(&ambientLoop);
     if (hasTecladoSound) ma_sound_uninit(&tecladoSound);
+    if (hasStepsSound) { ma_sound_stop(&stepsSound); ma_sound_uninit(&stepsSound); }
     ma_engine_uninit(&engine);
     glfwTerminate();
     return 0;

@@ -19,6 +19,7 @@ struct ModelMesh {
     GLuint ebo = 0;
     Texture* diffuseTexture = nullptr;
     glm::vec3 baseColor = glm::vec3(1.0f);
+    std::vector<ModelVertex> vertices;
     std::vector<unsigned int> indices;
     size_t indexCount = 0;
 
@@ -35,6 +36,7 @@ public:
     glm::vec3 boundsMin() const { return mBoundsMin; }
     glm::vec3 boundsMax() const { return mBoundsMax; }
     const std::string& lastError() const { return mLastError; }
+    const std::vector<ModelMesh>& meshes() const { return mMeshes; }
 
 private:
     std::vector<ModelMesh> mMeshes;
