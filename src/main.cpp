@@ -482,6 +482,8 @@ int main() {
     float dreamBlackTimer = 0.0f;
     ma_sound tecladoSound;
     bool hasTecladoSound = false;
+    ma_sound stepsSound;
+    bool hasStepsSound = false;
     bool tecladoPlayed = false;
     bool prevMouseDown = false;
 
@@ -1086,6 +1088,10 @@ int main() {
                 gHouseCapturedMouse = true;
                 firstMouse = true;
             }
+            if (!hasStepsSound) {
+                hasStepsSound = ma_sound_init_from_file(&engine, "assets/sounds/effects/steps.wav", 0, nullptr, nullptr, &stepsSound) == MA_SUCCESS;
+                if (hasStepsSound) ma_sound_set_looping(&stepsSound, MA_TRUE);
+            }
             double mx2, my2;
             glfwGetCursorPos(gWindow, &mx2, &my2);
             if (firstMouse) { lastMouseX = mx2; lastMouseY = my2; firstMouse = false; }
@@ -1149,6 +1155,18 @@ int main() {
                 }
             }
 
+            // Footstep sound
+            {
+                bool moving = move.x != 0.0f || move.z != 0.0f;
+                if (hasStepsSound) {
+                    if (moving && grounded) {
+                        if (!ma_sound_is_playing(&stepsSound)) ma_sound_start(&stepsSound);
+                        ma_sound_set_pitch(&stepsSound, 1.0f);
+                    } else {
+                        if (ma_sound_is_playing(&stepsSound)) ma_sound_stop(&stepsSound);
+                    }
+                }
+            }
             camPos = nextPos;
             glDisable(GL_CULL_FACE);
             glEnable(GL_DEPTH_TEST);
@@ -1296,6 +1314,7 @@ int main() {
     if (hasLoadingLoop) ma_sound_uninit(&loadingLoop);
     if (hasAmbientLoop) ma_sound_uninit(&ambientLoop);
     if (hasTecladoSound) ma_sound_uninit(&tecladoSound);
+    if (hasStepsSound) { ma_sound_stop(&stepsSound); ma_sound_uninit(&stepsSound); }
     ma_engine_uninit(&engine);
     glfwTerminate();
     return 0;
