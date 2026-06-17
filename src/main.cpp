@@ -1108,8 +1108,7 @@ int main() {
             front.z = sin(glm::radians(camYaw)) * cos(glm::radians(camPitch));
             camFront = glm::normalize(front);
             glm::vec3 right = glm::normalize(glm::cross(camFront, camUp));
-            bool sprinting = glfwGetKey(gWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
-            float speed = 7.5f * dt * (sprinting ? 2.0f : 1.0f);
+            float speed = 7.5f * dt;
 
             // Desired horizontal movement
             glm::vec3 move(0.0f);
@@ -1162,13 +1161,12 @@ int main() {
                 if (hasStepsSound) {
                     if (moving && grounded) {
                         if (!ma_sound_is_playing(&stepsSound)) ma_sound_start(&stepsSound);
-                        ma_sound_set_pitch(&stepsSound, sprinting ? 1.8f : 1.0f);
+                        ma_sound_set_pitch(&stepsSound, 1.0f);
                     } else {
                         if (ma_sound_is_playing(&stepsSound)) ma_sound_stop(&stepsSound);
                     }
                 }
             }
-
             camPos = nextPos;
             glDisable(GL_CULL_FACE);
             glEnable(GL_DEPTH_TEST);
