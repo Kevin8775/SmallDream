@@ -92,7 +92,7 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
             if (hovered == 0) {
                 *gStatePtr = AppState::StoryChoice;
                 gCreditsPaused = false;
-                gCreditsPauseStarted = 0.0;
+                gCreditsPauseStarted = 0.0; 
                 gCreditsPauseAccum = 0.0;
             } else if (hovered == 1) {
                 *gStatePtr = AppState::HouseLoading;
@@ -1186,20 +1186,19 @@ int main() {
             glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
             float floorY = minW.y + (maxW.y - minW.y) * 0.40f;
             if (houseCollider.isBuilt()) {
-                float sampledFloor = houseCollider.getFloorHeight(camPos + glm::vec3(0.0f, eyeHeight + 0.5f, 0.0f));
+                float sampledFloor = houseCollider.getFloorHeight(camPos + glm::vec3(0.0f, eyeHeight + 1.5f, 0.0f));
                 if (sampledFloor > camPos.y - 100.0f) floorY = sampledFloor;
             }
 
             glm::vec3 next = camPos + move;
             if (houseCollider.isBuilt()) {
-                for (int iter = 0; iter < 2; ++iter) {
+                for (int iter = 0; iter < 4; ++iter) {
                     glm::vec3 normal;
                     float penetration;
                     if (houseCollider.collideSphere(next, playerRadius, normal, penetration)) {
-                        next += normal * (penetration + 0.001f);
-                        glm::vec3 vel = next - camPos;
-                        vel = vel - glm::dot(vel, normal) * normal;
-                        next = camPos + vel;
+                        next += normal * (penetration + 0.005f);
+                        move = move - glm::dot(move, normal) * normal;
+                        next = camPos + move;
                     } else {
                         break;
                     }
@@ -1207,7 +1206,7 @@ int main() {
             }
 
             float footY = next.y - eyeHeight;
-            bool grounded = footY <= floorY + 0.02f && (floorY - footY) < 1.0f;
+            bool grounded = footY <= floorY + 0.15f && (floorY - footY) < 2.0f;
             if (grounded) {
                 next.y = floorY + eyeHeight;
                 houseVerticalVelocity = 0.0f;
