@@ -1,14 +1,16 @@
 #include "Menu.h"
 #include "TextRenderer.h"
+#include "Localization.h"
 #include <iostream>
 
-Menu::Menu() : mTextRenderer(nullptr), mWindowWidth(0), mWindowHeight(0), mHoveredIndex(-1), mTextScale(1.0f) {
+Menu::Menu() : mTextRenderer(nullptr), mWindowWidth(0), mWindowHeight(0), mHoveredIndex(-1), mTextScale(1.0f), mLanguage(Language::Spanish) {
     mItems = {
-        {"New Dream", 0, 0, 0, 0, false},
-        {"Continue Exploring", 0, 0, 0, 0, false},
-        {"Controls", 0, 0, 0, 0, false},
-        {"Credits", 0, 0, 0, 0, false},
-        {"Exit", 0, 0, 0, 0, false}
+        {"", 0, 0, 0, 0, false},
+        {"", 0, 0, 0, 0, false},
+        {"", 0, 0, 0, 0, false},
+        {"", 0, 0, 0, 0, false},
+        {"", 0, 0, 0, 0, false},
+        {"", 0, 0, 0, 0, false}
     };
 }
 
@@ -17,7 +19,26 @@ void Menu::init(TextRenderer* textRenderer, int windowWidth, int windowHeight, f
     mWindowWidth = windowWidth;
     mWindowHeight = windowHeight;
     mTextScale = textScale;
+    mLanguage = Localization::current();
+    refreshLabels();
     recalcPositions();
+}
+
+void Menu::setLanguage(Language language) {
+    mLanguage = language;
+    refreshLabels();
+    recalcPositions();
+    mHoveredIndex = -1;
+}
+
+void Menu::refreshLabels() {
+    if (mItems.size() < 6) return;
+    mItems[0].text = Localization::t(TextId::MenuNewDream);
+    mItems[1].text = Localization::t(TextId::MenuContinueExploring);
+    mItems[2].text = Localization::t(TextId::MenuControls);
+    mItems[3].text = Localization::t(TextId::MenuCredits);
+    mItems[4].text = Localization::t(TextId::MenuLanguage);
+    mItems[5].text = Localization::t(TextId::MenuExit);
 }
 
 void Menu::recalcPositions() {

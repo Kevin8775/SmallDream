@@ -4,6 +4,8 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+#include "Localization.h"
+
 struct ma_engine;
 struct ma_sound;
 
@@ -34,7 +36,7 @@ private:
     void stopAmbient();
 
     struct LineInfo {
-        std::string text;
+        TextId textId;
         std::string soundPath;
         bool waitForSound;
     };

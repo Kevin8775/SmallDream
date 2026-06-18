@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <cstring>
 
 MeshCollider::~MeshCollider() {
     destroy();
@@ -62,7 +61,6 @@ void MeshCollider::addFloorQuad(float y, float xMin, float xMax, float zMin, flo
 void MeshCollider::build() {
     if (mTriangles.empty()) return;
 
-    // Clean up old GPU resources but KEEP triangles
     if (mDebugVAO) glDeleteVertexArrays(1, &mDebugVAO);
     if (mDebugVBO) glDeleteBuffers(1, &mDebugVBO);
     mDebugVAO = 0;
@@ -70,7 +68,6 @@ void MeshCollider::build() {
     mDebugVertexCount = 0;
     mGrid.clear();
 
-    // Compute bounding box of all triangles
     mGridMin = glm::vec3(1e9f);
     mGridMax = glm::vec3(-1e9f);
     for (const auto& tri : mTriangles) {
@@ -82,16 +79,12 @@ void MeshCollider::build() {
         mGridMax = glm::max(mGridMax, tri.v2);
     }
 
-    // Expand slightly to avoid precision issues
     glm::vec3 expand(0.01f);
     mGridMin -= expand;
     mGridMax += expand;
 
-    // Assign triangles to grid cells
     for (size_t triIdx = 0; triIdx < mTriangles.size(); ++triIdx) {
         const auto& tri = mTriangles[triIdx];
-
-        // Compute triangle bbox
         glm::vec3 tmin = glm::min(glm::min(tri.v0, tri.v1), tri.v2);
         glm::vec3 tmax = glm::max(glm::max(tri.v0, tri.v1), tri.v2);
 
@@ -109,7 +102,6 @@ void MeshCollider::build() {
         }
     }
 
-    // Build debug VAO (all triangles as flat vertex list)
     std::vector<glm::vec3> debugVerts;
     debugVerts.reserve(mTriangles.size() * 3);
     for (const auto& tri : mTriangles) {
@@ -123,8 +115,7 @@ void MeshCollider::build() {
     glGenBuffers(1, &mDebugVBO);
     glBindVertexArray(mDebugVAO);
     glBindBuffer(GL_ARRAY_BUFFER, mDebugVBO);
-    glBufferData(GL_ARRAY_BUFFER, debugVerts.size() * sizeof(glm::vec3),
-                 debugVerts.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, debugVerts.size() * sizeof(glm::vec3), debugVerts.data(), GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
     glBindVertexArray(0);
@@ -152,7 +143,6 @@ glm::vec3 MeshCollider::triangleNormal(const glm::vec3& a, const glm::vec3& b, c
 
 glm::vec3 MeshCollider::closestPointOnTriangle(const glm::vec3& p,
     const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
-    // Barycentric projection method
     glm::vec3 ab = b - a;
     glm::vec3 ac = c - a;
     glm::vec3 ap = p - a;
@@ -200,11 +190,9 @@ bool MeshCollider::collideSphere(const glm::vec3& center, float radius,
     if (!mBuilt) return false;
 
     bool hit = false;
-    float minDist = radius;
     glm::vec3 bestNormal(0.0f);
     float bestPen = 0.0f;
 
-    // Determine grid cells that overlap the sphere's bounding box
     glm::vec3 sphereMin = center - glm::vec3(radius);
     glm::vec3 sphereMax = center + glm::vec3(radius);
 
@@ -223,7 +211,6 @@ bool MeshCollider::collideSphere(const glm::vec3& center, float radius,
                 for (size_t triIdx : cell.triIndices) {
                     const auto& tri = mTriangles[triIdx];
 
-                    // Back-face culling for horizontal surfaces (skip if sphere is below the "standable" side)
                     glm::vec3 te1 = tri.v1 - tri.v0;
                     glm::vec3 te2 = tri.v2 - tri.v0;
                     glm::vec3 tn = glm::cross(te1, te2);
@@ -295,15 +282,12 @@ float MeshCollider::getFloorHeight(const glm::vec3& position, float maxDist) con
                 for (size_t triIdx : cell.triIndices) {
                     const auto& tri = mTriangles[triIdx];
 
-                    // Skip non-upward-facing triangles (can't stand on walls/ceilings)
                     glm::vec3 e1 = tri.v1 - tri.v0;
                     glm::vec3 e2 = tri.v2 - tri.v0;
                     if (glm::cross(e1, e2).y <= 0.0f) continue;
 
-                    // Möller–Trumbore, direction = (0, -1, 0)
                     glm::vec3 pvec = glm::cross(glm::vec3(0.0f, -1.0f, 0.0f), e2);
                     float det = glm::dot(e1, pvec);
-
                     if (std::abs(det) < 1e-8f) continue;
 
                     float invDet = 1.0f / det;

@@ -44,6 +44,7 @@
     <ClCompile Include="src\CubemapTexture.cpp" />
     <ClCompile Include="src\TextRenderer.cpp" />
     <ClCompile Include="src\Menu.cpp" />
+    <ClCompile Include="src\Localization.cpp" />
     <ClCompile Include="src\VisualNovel.cpp" />
     <ClCompile Include="src\Model.cpp" />
     <ClCompile Include="src\MeshCollider.cpp" />
@@ -54,6 +55,7 @@
     <ClInclude Include="src\include\CubemapTexture.h" />
     <ClInclude Include="src\include\TextRenderer.h" />
     <ClInclude Include="src\include\Menu.h" />
+    <ClInclude Include="src\include\Localization.h" />
     <ClInclude Include="src\include\VisualNovel.h" />
     <ClInclude Include="src\include\Model.h" />
     <ClInclude Include="src\include\MeshCollider.h" />

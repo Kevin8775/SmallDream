@@ -3,6 +3,8 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+#include "Localization.h"
+
 struct MenuItem {
     std::string text;
     float x, y, w, h;
@@ -15,6 +17,7 @@ class Menu {
 public:
     Menu();
     void init(TextRenderer* textRenderer, int windowWidth, int windowHeight, float textScale);
+    void setLanguage(Language language);
     void update(float mouseX, float mouseY);
     int getHoveredIndex() const { return mHoveredIndex; }
     const std::vector<MenuItem>& getItems() const { return mItems; }
@@ -28,5 +31,7 @@ private:
     int mHoveredIndex;
     float mTextScale;
     float mSlideOffset = 0.0f;
+    Language mLanguage;
     void recalcPositions();
+    void refreshLabels();
 };
