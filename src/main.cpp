@@ -1190,18 +1190,27 @@ int main() {
                 if (sampledFloor > camPos.y - 100.0f) floorY = sampledFloor;
             }
 
-            glm::vec3 next = camPos + move;
+            // Slide collision: separate horizontal (XZ) and vertical (Y) movement
+            glm::vec3 safePos = camPos;
+            glm::vec3 next = safePos;
+
+            // 1. Horizontal slide — move on XZ, revert only XZ on collision
+            next.x += move.x; next.z += move.z;
             if (houseCollider.isBuilt()) {
-                for (int iter = 0; iter < 4; ++iter) {
-                    glm::vec3 normal;
-                    float penetration;
-                    if (houseCollider.collideSphere(next, playerRadius, normal, penetration)) {
-                        next += normal * (penetration + 0.005f);
-                        move = move - glm::dot(move, normal) * normal;
-                        next = camPos + move;
-                    } else {
-                        break;
-                    }
+                glm::vec3 n; float p;
+                if (houseCollider.collideSphere(next, playerRadius, n, p)) {
+                    next.x = safePos.x; next.z = safePos.z;
+                }
+            }
+
+            // 2. Vertical movement — move on Y, push away from surface on collision
+            next.y += move.y;
+            if (houseCollider.isBuilt()) {
+                glm::vec3 n; float p;
+                if (houseCollider.collideSphere(next, playerRadius, n, p)) {
+                    next += n * (p + 0.001f);
+                    next.x = safePos.x; next.z = safePos.z;
+                    houseVerticalVelocity = 0.0f;
                 }
             }
 
