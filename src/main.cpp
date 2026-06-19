@@ -377,6 +377,7 @@ int main() {
         "assets/textures/skybox-menu/nz.png"
     };
     CubemapTexture* skyboxTex = new CubemapTexture(skyboxFaces);
+    CubemapTexture* skyboxHouseTex = nullptr;
 
     std::vector<Texture*> spriteFrames;
     for (int i = 0; i < SPRITE_FRAMES; i++) {
@@ -1147,6 +1148,16 @@ int main() {
                     float biggest = std::max(size.x, std::max(size.y, size.z));
                     houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
                     rebuildHouseCollider();
+                    if (skyboxHouseTex) delete skyboxHouseTex;
+                    std::array<std::string, 6> houseSkyFaces = {
+                        "assets/textures/skybox_house/_px.png",
+                        "assets/textures/skybox_house/_nx.png",
+                        "assets/textures/skybox_house/_py.png",
+                        "assets/textures/skybox_house/_ny.png",
+                        "assets/textures/skybox_house/_pz.png",
+                        "assets/textures/skybox_house/_nz.png"
+                    };
+                    skyboxHouseTex = new CubemapTexture(houseSkyFaces);
                     placeCameraInsideHouse();
                 }
             }
@@ -1196,6 +1207,16 @@ int main() {
                     float biggest = std::max(size.x, std::max(size.y, size.z));
                     houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
                     rebuildHouseCollider();
+                    if (skyboxHouseTex) delete skyboxHouseTex;
+                    std::array<std::string, 6> houseSkyFaces = {
+                        "assets/textures/skybox_house/_px.png",
+                        "assets/textures/skybox_house/_nx.png",
+                        "assets/textures/skybox_house/_py.png",
+                        "assets/textures/skybox_house/_ny.png",
+                        "assets/textures/skybox_house/_pz.png",
+                        "assets/textures/skybox_house/_nz.png"
+                    };
+                    skyboxHouseTex = new CubemapTexture(houseSkyFaces);
                     placeCameraInsideHouse();
                 }
             }
@@ -1307,6 +1328,20 @@ int main() {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             glm::mat4 view = glm::lookAt(camPos, camPos + camFront, camUp);
             glm::mat4 projection = glm::perspective(glm::radians(70.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.05f, 500.0f);
+
+            if (skyboxHouseTex) {
+                glDepthFunc(GL_LEQUAL);
+                glm::mat4 skyView = glm::mat4(glm::mat3(view));
+                skyboxShader.use();
+                skyboxShader.setMat4("uProjection", glm::value_ptr(projection));
+                skyboxShader.setMat4("uView", glm::value_ptr(skyView));
+                skyboxShader.setMat4("uModel", glm::value_ptr(glm::mat4(1.0f)));
+                skyboxShader.setInt("uSkybox", 0);
+                skyboxHouseTex->bind(0);
+                glBindVertexArray(skyboxVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 36);
+                glDepthFunc(GL_LESS);
+            }
             glm::mat4 model = glm::translate(glm::mat4(1.0f), housePos);
             model = glm::translate(model, -houseCenter);
             model = glm::scale(model, glm::vec3(houseModelScale));
@@ -1498,6 +1533,7 @@ int main() {
     Localization::save("language.cfg");
 
     delete skyboxTex;
+    delete skyboxHouseTex;
     for (auto* t : cloudFrames) delete t;
     delete glowTex;
     for (auto* t : spriteFrames) delete t;
