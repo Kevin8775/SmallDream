@@ -23,6 +23,7 @@
 #include "VisualNovel.h"
 #include "Model.h"
 #include "MeshCollider.h"
+#include "Door.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -92,7 +93,7 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
             if (hovered == 0) {
                 *gStatePtr = AppState::StoryChoice;
                 gCreditsPaused = false;
-                gCreditsPauseStarted = 0.0;
+                gCreditsPauseStarted = 0.0; 
                 gCreditsPauseAccum = 0.0;
             } else if (hovered == 1) {
                 *gStatePtr = AppState::HouseLoading;
@@ -376,6 +377,7 @@ int main() {
         "assets/textures/skybox-menu/nz.png"
     };
     CubemapTexture* skyboxTex = new CubemapTexture(skyboxFaces);
+    CubemapTexture* skyboxHouseTex = nullptr;
 
     std::vector<Texture*> spriteFrames;
     for (int i = 0; i < SPRITE_FRAMES; i++) {
@@ -450,12 +452,44 @@ int main() {
     const float eyeHeight = 2.0f;
     const float playerRadius = 0.3f;
     MeshCollider houseCollider;
+    // Door interaction system
+    bool puertaEKeyHeld = false;
+    Cuarto cuartoCocina;
+    Cuarto cuartoGaraje;
+    Cuarto cuartoBano;
+    std::vector<Puerta> puertas;
+    auto cargarEscenario = [&](const std::string& ruta, const glm::vec3& spawn) {
+        houseCollider.destroy();
+        houseModel.destroy();
+        houseLoaded = houseModel.load(ruta);
+        if (houseLoaded) {
+            houseMin = houseModel.boundsMin();
+            houseMax = houseModel.boundsMax();
+            houseCenter = (houseMin + houseMax) * 0.5f;
+            glm::vec3 size = houseMax - houseMin;
+            float biggest = std::max(size.x, std::max(size.y, size.z));
+            houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
+            housePos = (1.0f - houseModelScale) * houseCenter;
+            glm::mat4 colliderTransform = glm::translate(glm::mat4(1.0f), housePos)
+                                        * glm::translate(glm::mat4(1.0f), -houseCenter)
+                                        * glm::scale(glm::mat4(1.0f), glm::vec3(houseModelScale));
+            houseCollider.addModel(houseModel, colliderTransform);
+            glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
+            glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
+            float floorY = minW.y + (maxW.y - minW.y) * 0.05f;
+            float margin = 50.0f;
+            houseCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
+            houseCollider.build();
+            camPos = spawn;
+            houseVerticalVelocity = 0.0f;
+        }
+    };
     auto placeCameraInsideHouse = [&]() {
         glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
         glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
         glm::vec3 centerW = (minW + maxW) * 0.5f;
         float houseFloorY = minW.y + (maxW.y - minW.y) * 0.40f;
-        camPos = housePos + glm::vec3(-24.084934f, -4.044464f, 7.700874f);
+        camPos = housePos + glm::vec3(-24.084934f, -4.044464f, 7.700874f);  
         camFront = glm::normalize((housePos + centerW) - camPos);
         camYaw = -90.0f;
         camPitch = 0.0f;
@@ -486,6 +520,22 @@ int main() {
         houseCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
         houseCollider.build();
     };
+
+    // Door data configuration
+    cuartoCocina.rutaModelo = "assets/models/cocina/scene.gltf";  // <<< CAMBIAR: ruta del modelo 3D
+    cuartoCocina.puntoAparicion = glm::vec3(-17.067499f, -12.492846f, -32.295829f);
+    cuartoGaraje.rutaModelo = "assets/models/garaje/scene.gltf";   // <<< CAMBIAR
+    cuartoGaraje.puntoAparicion = glm::vec3(0.0f, 0.0f, 0.0f);    // <<< CAMBIAR: spawn del garaje
+    cuartoBano.rutaModelo = "assets/models/bano/scene.gltf";       // <<< CAMBIAR
+    cuartoBano.puntoAparicion = glm::vec3(0.0f, 0.0f, 0.0f);      // <<< CAMBIAR: spawn del baño
+
+    glm::vec3 tamanoPuerta(4.0f, 2.5f, 4.0f);
+
+    puertas.push_back({glm::vec3(-17.284657f, -12.492844f, -36.773849f), tamanoPuerta, "Presiona E para entrar al cuarto", &cuartoCocina});
+    puertas.push_back({glm::vec3(  9.757366f, -26.899001f, -20.823090f), tamanoPuerta, "Presiona E para entrar al garaje",  &cuartoGaraje});
+    puertas.push_back({glm::vec3(  5.084099f, -26.899008f, -18.237707f), tamanoPuerta, "Presiona E para entrar al bano",    &cuartoBano});
+    puertas.push_back({glm::vec3(-19.860470f, -26.899998f, -18.824844f), tamanoPuerta, "Esta puerta se encuentra cerrada",   nullptr});
+    puertas.push_back({glm::vec3(-30.161835f, -12.492846f, -34.673336f), tamanoPuerta, "Completa las 3 habitaciones para desbloquear esta puerta", nullptr});
 
     // Cloud transition animation
     float cloudAnimTimer = 0.0f;
@@ -1098,6 +1148,16 @@ int main() {
                     float biggest = std::max(size.x, std::max(size.y, size.z));
                     houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
                     rebuildHouseCollider();
+                    if (skyboxHouseTex) delete skyboxHouseTex;
+                    std::array<std::string, 6> houseSkyFaces = {
+                        "assets/textures/skybox_house/_px.png",
+                        "assets/textures/skybox_house/_nx.png",
+                        "assets/textures/skybox_house/_py.png",
+                        "assets/textures/skybox_house/_ny.png",
+                        "assets/textures/skybox_house/_pz.png",
+                        "assets/textures/skybox_house/_nz.png"
+                    };
+                    skyboxHouseTex = new CubemapTexture(houseSkyFaces);
                     placeCameraInsideHouse();
                 }
             }
@@ -1147,6 +1207,16 @@ int main() {
                     float biggest = std::max(size.x, std::max(size.y, size.z));
                     houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
                     rebuildHouseCollider();
+                    if (skyboxHouseTex) delete skyboxHouseTex;
+                    std::array<std::string, 6> houseSkyFaces = {
+                        "assets/textures/skybox_house/_px.png",
+                        "assets/textures/skybox_house/_nx.png",
+                        "assets/textures/skybox_house/_py.png",
+                        "assets/textures/skybox_house/_ny.png",
+                        "assets/textures/skybox_house/_pz.png",
+                        "assets/textures/skybox_house/_nz.png"
+                    };
+                    skyboxHouseTex = new CubemapTexture(houseSkyFaces);
                     placeCameraInsideHouse();
                 }
             }
@@ -1186,28 +1256,36 @@ int main() {
             glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
             float floorY = minW.y + (maxW.y - minW.y) * 0.40f;
             if (houseCollider.isBuilt()) {
-                float sampledFloor = houseCollider.getFloorHeight(camPos + glm::vec3(0.0f, eyeHeight + 0.5f, 0.0f));
+                float sampledFloor = houseCollider.getFloorHeight(camPos + glm::vec3(0.0f, eyeHeight + 1.5f, 0.0f));
                 if (sampledFloor > camPos.y - 100.0f) floorY = sampledFloor;
             }
 
-            glm::vec3 next = camPos + move;
+            // Slide collision: separate horizontal (XZ) and vertical (Y) movement
+            glm::vec3 safePos = camPos;
+            glm::vec3 next = safePos;
+
+            // 1. Horizontal slide — move on XZ, revert only XZ on collision
+            next.x += move.x; next.z += move.z;
             if (houseCollider.isBuilt()) {
-                for (int iter = 0; iter < 2; ++iter) {
-                    glm::vec3 normal;
-                    float penetration;
-                    if (houseCollider.collideSphere(next, playerRadius, normal, penetration)) {
-                        next += normal * (penetration + 0.001f);
-                        glm::vec3 vel = next - camPos;
-                        vel = vel - glm::dot(vel, normal) * normal;
-                        next = camPos + vel;
-                    } else {
-                        break;
-                    }
+                glm::vec3 n; float p;
+                if (houseCollider.collideSphere(next, playerRadius, n, p)) {
+                    next.x = safePos.x; next.z = safePos.z;
+                }
+            }
+
+            // 2. Vertical movement — move on Y, push away from surface on collision
+            next.y += move.y;
+            if (houseCollider.isBuilt()) {
+                glm::vec3 n; float p;
+                if (houseCollider.collideSphere(next, playerRadius, n, p)) {
+                    next += n * (p + 0.001f);
+                    next.x = safePos.x; next.z = safePos.z;
+                    houseVerticalVelocity = 0.0f;
                 }
             }
 
             float footY = next.y - eyeHeight;
-            bool grounded = footY <= floorY + 0.02f && (floorY - footY) < 1.0f;
+            bool grounded = footY <= floorY + 0.15f && (floorY - footY) < 2.0f;
             if (grounded) {
                 next.y = floorY + eyeHeight;
                 houseVerticalVelocity = 0.0f;
@@ -1231,11 +1309,39 @@ int main() {
             }
 
             camPos = next;
+            // Door interaction
+            {
+                bool eKeyDown = glfwGetKey(gWindow, GLFW_KEY_E) == GLFW_PRESS;
+                for (auto& puerta : puertas) {
+                    glm::vec3 d = glm::abs(camPos - puerta.posicion);
+                    if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
+                        if (eKeyDown && !puertaEKeyHeld && puerta.destino) {
+                            cargarEscenario(puerta.destino->rutaModelo, puerta.destino->puntoAparicion);
+                            break;
+                        }
+                    }
+                }
+                puertaEKeyHeld = eKeyDown;
+            }
             glDisable(GL_CULL_FACE);
             glEnable(GL_DEPTH_TEST);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             glm::mat4 view = glm::lookAt(camPos, camPos + camFront, camUp);
             glm::mat4 projection = glm::perspective(glm::radians(70.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.05f, 500.0f);
+
+            if (skyboxHouseTex) {
+                glDepthFunc(GL_LEQUAL);
+                glm::mat4 skyView = glm::mat4(glm::mat3(view));
+                skyboxShader.use();
+                skyboxShader.setMat4("uProjection", glm::value_ptr(projection));
+                skyboxShader.setMat4("uView", glm::value_ptr(skyView));
+                skyboxShader.setMat4("uModel", glm::value_ptr(glm::mat4(1.0f)));
+                skyboxShader.setInt("uSkybox", 0);
+                skyboxHouseTex->bind(0);
+                glBindVertexArray(skyboxVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 36);
+                glDepthFunc(GL_LESS);
+            }
             glm::mat4 model = glm::translate(glm::mat4(1.0f), housePos);
             model = glm::translate(model, -houseCenter);
             model = glm::scale(model, glm::vec3(houseModelScale));
@@ -1269,6 +1375,19 @@ int main() {
                 "POS: " + std::to_string(camPos.x) + ", " + std::to_string(camPos.y) + ", " + std::to_string(camPos.z),
                 20.0f, 20.0f, 0.45f, glm::vec3(0.2f, 1.0f, 0.2f)
             );
+            // Door prompt overlay
+            for (const auto& puerta : puertas) {
+                glm::vec3 d = glm::abs(camPos - puerta.posicion);
+                if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
+                    glm::vec2 msgSz = textRenderer.getTextSize(puerta.mensaje, 0.5f);
+                    textRenderer.renderText(
+                        puerta.mensaje,
+                        (WINDOW_WIDTH - msgSz.x) / 2.0f, WINDOW_HEIGHT * 0.55f,
+                        0.5f, glm::vec3(1.0f, 0.95f, 0.8f)
+                    );
+                    break;
+                }
+            }
         } else if (state == AppState::DreamLoading) {
             dreamLoadingTimer += dt;
 
@@ -1414,6 +1533,7 @@ int main() {
     Localization::save("language.cfg");
 
     delete skyboxTex;
+    delete skyboxHouseTex;
     for (auto* t : cloudFrames) delete t;
     delete glowTex;
     for (auto* t : spriteFrames) delete t;

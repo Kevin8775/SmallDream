@@ -217,7 +217,7 @@ bool MeshCollider::collideSphere(const glm::vec3& center, float radius,
                     float tnLen = glm::length(tn);
                     if (tnLen > 1e-8f) {
                         float ny = tn.y / tnLen;
-                        if (ny > 0.5f) {
+                        if (ny > 0.3f) {
                             glm::vec3 planeN = tn / tnLen;
                             if (glm::dot(planeN, center - tri.v0) < 0.0f) continue;
                         }
@@ -284,7 +284,7 @@ float MeshCollider::getFloorHeight(const glm::vec3& position, float maxDist) con
 
                     glm::vec3 e1 = tri.v1 - tri.v0;
                     glm::vec3 e2 = tri.v2 - tri.v0;
-                    if (glm::cross(e1, e2).y <= 0.0f) continue;
+                    if (glm::cross(e1, e2).y < -0.01f) continue;
 
                     glm::vec3 pvec = glm::cross(glm::vec3(0.0f, -1.0f, 0.0f), e2);
                     float det = glm::dot(e1, pvec);
