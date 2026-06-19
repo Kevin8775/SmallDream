@@ -23,6 +23,7 @@
 #include "VisualNovel.h"
 #include "Model.h"
 #include "MeshCollider.h"
+#include "Door.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -450,12 +451,44 @@ int main() {
     const float eyeHeight = 2.0f;
     const float playerRadius = 0.3f;
     MeshCollider houseCollider;
+    // Door interaction system
+    bool puertaEKeyHeld = false;
+    Cuarto cuartoCocina;
+    Cuarto cuartoGaraje;
+    Cuarto cuartoBano;
+    std::vector<Puerta> puertas;
+    auto cargarEscenario = [&](const std::string& ruta, const glm::vec3& spawn) {
+        houseCollider.destroy();
+        houseModel.destroy();
+        houseLoaded = houseModel.load(ruta);
+        if (houseLoaded) {
+            houseMin = houseModel.boundsMin();
+            houseMax = houseModel.boundsMax();
+            houseCenter = (houseMin + houseMax) * 0.5f;
+            glm::vec3 size = houseMax - houseMin;
+            float biggest = std::max(size.x, std::max(size.y, size.z));
+            houseModelScale = (biggest > 0.0f) ? houseTargetSize / biggest : 1.0f;
+            housePos = (1.0f - houseModelScale) * houseCenter;
+            glm::mat4 colliderTransform = glm::translate(glm::mat4(1.0f), housePos)
+                                        * glm::translate(glm::mat4(1.0f), -houseCenter)
+                                        * glm::scale(glm::mat4(1.0f), glm::vec3(houseModelScale));
+            houseCollider.addModel(houseModel, colliderTransform);
+            glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
+            glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
+            float floorY = minW.y + (maxW.y - minW.y) * 0.05f;
+            float margin = 50.0f;
+            houseCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
+            houseCollider.build();
+            camPos = spawn;
+            houseVerticalVelocity = 0.0f;
+        }
+    };
     auto placeCameraInsideHouse = [&]() {
         glm::vec3 minW = (houseMin - houseCenter) * houseModelScale;
         glm::vec3 maxW = (houseMax - houseCenter) * houseModelScale;
         glm::vec3 centerW = (minW + maxW) * 0.5f;
         float houseFloorY = minW.y + (maxW.y - minW.y) * 0.40f;
-        camPos = housePos + glm::vec3(-24.084934f, -4.044464f, 7.700874f);
+        camPos = housePos + glm::vec3(-24.084934f, -4.044464f, 7.700874f);  
         camFront = glm::normalize((housePos + centerW) - camPos);
         camYaw = -90.0f;
         camPitch = 0.0f;
@@ -486,6 +519,22 @@ int main() {
         houseCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
         houseCollider.build();
     };
+
+    // Door data configuration
+    cuartoCocina.rutaModelo = "assets/models/cocina/scene.gltf";  // <<< CAMBIAR: ruta del modelo 3D
+    cuartoCocina.puntoAparicion = glm::vec3(-17.067499f, -12.492846f, -32.295829f);
+    cuartoGaraje.rutaModelo = "assets/models/garaje/scene.gltf";   // <<< CAMBIAR
+    cuartoGaraje.puntoAparicion = glm::vec3(0.0f, 0.0f, 0.0f);    // <<< CAMBIAR: spawn del garaje
+    cuartoBano.rutaModelo = "assets/models/bano/scene.gltf";       // <<< CAMBIAR
+    cuartoBano.puntoAparicion = glm::vec3(0.0f, 0.0f, 0.0f);      // <<< CAMBIAR: spawn del baño
+
+    glm::vec3 tamanoPuerta(4.0f, 2.5f, 4.0f);
+
+    puertas.push_back({glm::vec3(-17.284657f, -12.492844f, -36.773849f), tamanoPuerta, "Presiona E para entrar al cuarto", &cuartoCocina});
+    puertas.push_back({glm::vec3(  9.757366f, -26.899001f, -20.823090f), tamanoPuerta, "Presiona E para entrar al garaje",  &cuartoGaraje});
+    puertas.push_back({glm::vec3(  5.084099f, -26.899008f, -18.237707f), tamanoPuerta, "Presiona E para entrar al bano",    &cuartoBano});
+    puertas.push_back({glm::vec3(-19.860470f, -26.899998f, -18.824844f), tamanoPuerta, "Esta puerta se encuentra cerrada",   nullptr});
+    puertas.push_back({glm::vec3(-30.161835f, -12.492846f, -34.673336f), tamanoPuerta, "Completa las 3 habitaciones para desbloquear esta puerta", nullptr});
 
     // Cloud transition animation
     float cloudAnimTimer = 0.0f;
@@ -1239,6 +1288,20 @@ int main() {
             }
 
             camPos = next;
+            // Door interaction
+            {
+                bool eKeyDown = glfwGetKey(gWindow, GLFW_KEY_E) == GLFW_PRESS;
+                for (auto& puerta : puertas) {
+                    glm::vec3 d = glm::abs(camPos - puerta.posicion);
+                    if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
+                        if (eKeyDown && !puertaEKeyHeld && puerta.destino) {
+                            cargarEscenario(puerta.destino->rutaModelo, puerta.destino->puntoAparicion);
+                            break;
+                        }
+                    }
+                }
+                puertaEKeyHeld = eKeyDown;
+            }
             glDisable(GL_CULL_FACE);
             glEnable(GL_DEPTH_TEST);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1277,6 +1340,19 @@ int main() {
                 "POS: " + std::to_string(camPos.x) + ", " + std::to_string(camPos.y) + ", " + std::to_string(camPos.z),
                 20.0f, 20.0f, 0.45f, glm::vec3(0.2f, 1.0f, 0.2f)
             );
+            // Door prompt overlay
+            for (const auto& puerta : puertas) {
+                glm::vec3 d = glm::abs(camPos - puerta.posicion);
+                if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
+                    glm::vec2 msgSz = textRenderer.getTextSize(puerta.mensaje, 0.5f);
+                    textRenderer.renderText(
+                        puerta.mensaje,
+                        (WINDOW_WIDTH - msgSz.x) / 2.0f, WINDOW_HEIGHT * 0.55f,
+                        0.5f, glm::vec3(1.0f, 0.95f, 0.8f)
+                    );
+                    break;
+                }
+            }
         } else if (state == AppState::DreamLoading) {
             dreamLoadingTimer += dt;
 
