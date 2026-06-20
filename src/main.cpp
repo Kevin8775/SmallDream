@@ -458,6 +458,7 @@ int main() {
     Cuarto cuartoGaraje;
     Cuarto cuartoBano;
     std::vector<Puerta> puertas;
+    std::vector<Puerta> puertasCasaRespaldo;
     auto cargarEscenario = [&](const std::string& ruta, const glm::vec3& spawn) {
         houseCollider.destroy();
         houseModel.destroy();
@@ -482,6 +483,13 @@ int main() {
             houseCollider.build();
             camPos = spawn;
             houseVerticalVelocity = 0.0f;
+
+            if (ruta.find("house") != std::string::npos) {
+                puertas = puertasCasaRespaldo;
+            } else {
+                if (puertasCasaRespaldo.empty()) puertasCasaRespaldo = puertas;
+                puertas.clear();
+            }
         }
     };
     auto placeCameraInsideHouse = [&]() {
@@ -611,6 +619,10 @@ int main() {
             houseVerticalVelocity = 0.0f;
             gShowCollisionDebug = false;
             firstMouse = true;
+            if (!puertasCasaRespaldo.empty()) {
+                puertas = puertasCasaRespaldo;
+                puertasCasaRespaldo.clear();
+            }
         } else if (gPauseReturnState == AppState::VisualNovel) {
             if (visualNovel) visualNovel->reset();
             dreamLoadingTimer = 0.0f;
