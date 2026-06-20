@@ -524,8 +524,8 @@ int main() {
     // Door data configuration
     cuartoCocina.rutaModelo = "assets/models/cocina/scene.gltf";  // <<< CAMBIAR: ruta del modelo 3D
     cuartoCocina.puntoAparicion = glm::vec3(-17.067499f, -12.492846f, -32.295829f);
-    cuartoGaraje.rutaModelo = "assets/models/garaje/scene.gltf";   // <<< CAMBIAR
-    cuartoGaraje.puntoAparicion = glm::vec3(0.0f, 0.0f, 0.0f);    // <<< CAMBIAR: spawn del garaje
+    cuartoGaraje.rutaModelo = "assets/models/garage/scene.gltf";
+    cuartoGaraje.puntoAparicion = glm::vec3(0.0f, 5.0f, 0.0f);    // AJUSTAR desde POS del HUD
     cuartoBano.rutaModelo = "assets/models/bano/scene.gltf";       // <<< CAMBIAR
     cuartoBano.puntoAparicion = glm::vec3(0.0f, 0.0f, 0.0f);      // <<< CAMBIAR: spawn del baño
 
