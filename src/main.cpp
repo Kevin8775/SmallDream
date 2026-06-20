@@ -48,6 +48,7 @@ enum class AppState {
     DreamState,
     Pause,
     HouseLoading,
+    RoomLoading,
     HouseWalk
 };
 
@@ -459,6 +460,10 @@ int main() {
     Cuarto cuartoBano;
     std::vector<Puerta> puertas;
     std::vector<Puerta> puertasCasaRespaldo;
+    std::string pendingRoomPath;
+    glm::vec3 pendingRoomSpawn;
+    bool roomLoadingStarted = false;
+    float roomLoadingTimer = 0.0f;
     auto cargarEscenario = [&](const std::string& ruta, const glm::vec3& spawn) {
         houseCollider.destroy();
         houseModel.destroy();
@@ -616,6 +621,8 @@ int main() {
             houseLoaded = false;
             houseLoadingStarted = false;
             houseLoadingTimer = 0.0f;
+            roomLoadingStarted = false;
+            roomLoadingTimer = 0.0f;
             houseVerticalVelocity = 0.0f;
             gShowCollisionDebug = false;
             firstMouse = true;
@@ -1208,6 +1215,53 @@ int main() {
                 state = AppState::HouseWalk;
                 houseLoadingStarted = false;
             }
+        } else if (state == AppState::RoomLoading) {
+            if (!roomLoadingStarted) {
+                roomLoadingStarted = true;
+                roomLoadingTimer = 0.0f;
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                gHouseCapturedMouse = false;
+                cargarEscenario(pendingRoomPath, pendingRoomSpawn);
+            }
+
+            roomLoadingTimer += dt;
+            float p = std::min(roomLoadingTimer / 1.2f, 1.0f);
+            glDisable(GL_DEPTH_TEST);
+            bgShader.use();
+            bgShader.setInt("uTexture", 0);
+            bgShader.setFloat("uBlurAmount", 6.0f);
+            bgTex.bind(0);
+            {
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::scale(model, glm::vec3(WINDOW_WIDTH, WINDOW_HEIGHT, 1.0f));
+                bgShader.setMat4("uModel", glm::value_ptr(model));
+                bgShader.setMat4("uProjection", glm::value_ptr(proj));
+                glBindVertexArray(quadVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+            }
+
+            {
+                float barW = 620.0f;
+                float barH = 26.0f;
+                float barX = (WINDOW_WIDTH - barW) / 2.0f;
+                float barY = WINDOW_HEIGHT * 0.72f;
+                renderSprite(quadVAO, spriteShader, *loadingBarTex, proj,
+                             barX, barY, barW, barH,
+                             glm::vec4(0.15f, 0.15f, 0.15f, 0.92f));
+                renderSprite(quadVAO, spriteShader, *loadingBarTex, proj,
+                             barX, barY, barW * p, barH,
+                             glm::vec4(0.82f, 0.74f, 0.55f, 0.95f));
+
+                std::string prepText = Localization::t(TextId::HousePreparingScene);
+                glm::vec2 prepSz = textRenderer.getTextSize(prepText, 0.5f);
+                textRenderer.renderText(prepText, (WINDOW_WIDTH - prepSz.x) / 2.0f, barY - 36.0f, 0.5f, glm::vec3(0.95f));
+            }
+
+            if (p >= 1.0f) {
+                state = AppState::HouseWalk;
+                roomLoadingStarted = false;
+                firstMouse = true;
+            }
         } else if (state == AppState::HouseWalk) {
             if (!houseLoaded) {
                 houseLoaded = houseModel.load("assets/models/house/scene.gltf");
@@ -1328,7 +1382,13 @@ int main() {
                     glm::vec3 d = glm::abs(camPos - puerta.posicion);
                     if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
                         if (eKeyDown && !puertaEKeyHeld && puerta.destino) {
-                            cargarEscenario(puerta.destino->rutaModelo, puerta.destino->puntoAparicion);
+                            pendingRoomPath = puerta.destino->rutaModelo;
+                            pendingRoomSpawn = puerta.destino->puntoAparicion;
+                            state = AppState::RoomLoading;
+                            roomLoadingStarted = false;
+                            roomLoadingTimer = 0.0f;
+                            glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                            gHouseCapturedMouse = false;
                             break;
                         }
                     }
