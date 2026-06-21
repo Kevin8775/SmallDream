@@ -1,0 +1,11 @@
+Model Information:
+* title:	Evil vacuum cleaner robot
+* source:	https://sketchfab.com/3d-models/evil-vacuum-cleaner-robot-67e2d26d4f754e07877159bf2d744bce
+* author:	saltoc in training (https://sketchfab.com/saltoc)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Evil vacuum cleaner robot" (https://sketchfab.com/3d-models/evil-vacuum-cleaner-robot-67e2d26d4f754e07877159bf2d744bce) by saltoc in training (https://sketchfab.com/saltoc) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
