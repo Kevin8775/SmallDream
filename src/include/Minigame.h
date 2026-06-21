@@ -8,7 +8,10 @@
 class Shader;
 class TextRenderer;
 
-#include <miniaudio.h>
+extern "C" {
+    typedef struct ma_engine ma_engine;
+    typedef struct ma_sound ma_sound;
+}
 
 enum class MinigameType { QuickTap, ColorMatch, Sequence };
 enum class MinigameState { None, Playing, Won, Lost };
@@ -156,9 +159,9 @@ private:
     void renderStar(Shader& shader, float cx, float cy, float outerR, float innerR, float rotation, float r, float g, float b, float a, int points = 5);
     void renderHexagon(Shader& shader, float cx, float cy, float size, float rotation, float r, float g, float b, float a);
 
-    ma_sound mWinSound;
-    ma_sound mLoseSound;
-    ma_sound mFlipSound;
+    ma_sound* mWinSound;
+    ma_sound* mLoseSound;
+    ma_sound* mFlipSound;
     bool mSoundsLoaded;
     ma_engine* mEngine;
 

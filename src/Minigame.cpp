@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cmath>
 #include <algorithm>
+#include <miniaudio.h>
 
 static float randFloat(float a, float b) {
     return a + (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) * (b - a);
@@ -70,9 +71,12 @@ Minigame::~Minigame() {
     if (mRingVAO) glDeleteVertexArrays(1, &mRingVAO);
     if (mRingVBO) glDeleteBuffers(1, &mRingVBO);
     if (mSoundsLoaded) {
-        ma_sound_uninit(&mWinSound);
-        ma_sound_uninit(&mLoseSound);
-        ma_sound_uninit(&mFlipSound);
+        ma_sound_uninit(mWinSound);
+        ma_sound_uninit(mLoseSound);
+        ma_sound_uninit(mFlipSound);
+        delete mWinSound;
+        delete mLoseSound;
+        delete mFlipSound;
     }
 }
 
@@ -80,9 +84,12 @@ void Minigame::loadSounds(ma_engine* engine) {
     if (mSoundsLoaded || !engine) return;
     mEngine = engine;
     bool ok = true;
-    if (ma_sound_init_from_file(mEngine, "assets/sounds/ui/win.wav", 0, nullptr, nullptr, &mWinSound) != MA_SUCCESS) ok = false;
-    if (ma_sound_init_from_file(mEngine, "assets/sounds/ui/error.wav", 0, nullptr, nullptr, &mLoseSound) != MA_SUCCESS) ok = false;
-    if (ma_sound_init_from_file(mEngine, "assets/sounds/ui/flipcard.wav", 0, nullptr, nullptr, &mFlipSound) != MA_SUCCESS) ok = false;
+    mWinSound = new ma_sound;
+    mLoseSound = new ma_sound;
+    mFlipSound = new ma_sound;
+    if (ma_sound_init_from_file(mEngine, "assets/sounds/ui/win.wav", 0, nullptr, nullptr, mWinSound) != MA_SUCCESS) ok = false;
+    if (ma_sound_init_from_file(mEngine, "assets/sounds/ui/error.wav", 0, nullptr, nullptr, mLoseSound) != MA_SUCCESS) ok = false;
+    if (ma_sound_init_from_file(mEngine, "assets/sounds/ui/flipcard.wav", 0, nullptr, nullptr, mFlipSound) != MA_SUCCESS) ok = false;
     mSoundsLoaded = ok;
 }
 
@@ -536,7 +543,7 @@ void Minigame::updateQuickTap(float dt, bool mousePressed, float mouseX, float m
                 mQuickTap.difficulty += 0.15f;
                 emitParticles(mQuickTap.targets[i].x, mQuickTap.targets[i].y, 0.2f, 1.0f, 0.4f, 15, 160.0f, 5.0f);
                 addFloatingText("+1", mQuickTap.targets[i].x - 10.0f, mQuickTap.targets[i].y - 20.0f, 0.2f, 1.0f, 0.4f);
-                if (mSoundsLoaded) ma_sound_start(&mFlipSound);
+                if (mSoundsLoaded) ma_sound_start(mFlipSound);
                 break;
             }
         }
@@ -547,12 +554,12 @@ void Minigame::updateQuickTap(float dt, bool mousePressed, float mouseX, float m
             mState = MinigameState::Won;
             mShowResultTimer = 0.0f;
             mFlashAlpha = 0.6f; mFlashTimer = 0.0f; mFlashIsWin = true;
-            if (mSoundsLoaded) ma_sound_start(&mWinSound);
+            if (mSoundsLoaded) ma_sound_start(mWinSound);
         } else {
             mState = MinigameState::Lost;
             mShowResultTimer = 0.0f;
             mFlashAlpha = 0.6f; mFlashTimer = 0.0f; mFlashIsWin = false;
-            if (mSoundsLoaded) ma_sound_start(&mLoseSound);
+            if (mSoundsLoaded) ma_sound_start(mLoseSound);
         }
     }
 }
@@ -570,12 +577,12 @@ void Minigame::updateColorMatch(float dt, bool mousePressed, float mouseX, float
                 mState = MinigameState::Won;
                 mShowResultTimer = 0.0f;
                 mFlashAlpha = 0.6f; mFlashTimer = 0.0f; mFlashIsWin = true;
-                if (mSoundsLoaded) ma_sound_start(&mWinSound);
+                if (mSoundsLoaded) ma_sound_start(mWinSound);
             } else {
                 mState = MinigameState::Lost;
                 mShowResultTimer = 0.0f;
                 mFlashAlpha = 0.6f; mFlashTimer = 0.0f; mFlashIsWin = false;
-                if (mSoundsLoaded) ma_sound_start(&mLoseSound);
+                if (mSoundsLoaded) ma_sound_start(mLoseSound);
             }
             return;
         }
@@ -614,14 +621,14 @@ void Minigame::updateColorMatch(float dt, bool mousePressed, float mouseX, float
                 mColorMatch.flashTimer = 0.0f;
                 emitParticles(bx + boxSize / 2.0f, by + boxSize / 2.0f, 1.0f, 0.85f, 0.1f, 20, 160.0f, 6.0f);
                 addFloatingText("\u00a1Correcto!", windowW / 2.0f - 50.0f, startY - 40.0f, 1.0f, 0.85f, 0.1f);
-                if (mSoundsLoaded) ma_sound_start(&mFlipSound);
+                if (mSoundsLoaded) ma_sound_start(mFlipSound);
             } else {
                 mColorMatch.flashType = -1;
                 mColorMatch.flashTimer = 0.0f;
                 mColorMatch.shakeTimer = 0.2f;
                 emitParticles(bx + boxSize / 2.0f, by + boxSize / 2.0f, 0.9f, 0.2f, 0.1f, 12, 120.0f, 5.0f);
                 addFloatingText("X", windowW / 2.0f - 10.0f, startY - 40.0f, 0.9f, 0.2f, 0.1f);
-                if (mSoundsLoaded) ma_sound_start(&mLoseSound);
+                if (mSoundsLoaded) ma_sound_start(mLoseSound);
             }
             mColorMatch.round++;
             mColorMatch.roundTimer = 0.0f;
@@ -630,12 +637,12 @@ void Minigame::updateColorMatch(float dt, bool mousePressed, float mouseX, float
                     mState = MinigameState::Won;
                     mShowResultTimer = 0.0f;
                     mFlashAlpha = 0.6f; mFlashTimer = 0.0f; mFlashIsWin = true;
-                    if (mSoundsLoaded) ma_sound_start(&mWinSound);
+                    if (mSoundsLoaded) ma_sound_start(mWinSound);
                 } else {
                     mState = MinigameState::Lost;
                     mShowResultTimer = 0.0f;
                     mFlashAlpha = 0.6f; mFlashTimer = 0.0f; mFlashIsWin = false;
-                    if (mSoundsLoaded) ma_sound_start(&mLoseSound);
+                    if (mSoundsLoaded) ma_sound_start(mLoseSound);
                 }
                 return;
             }
@@ -720,7 +727,7 @@ void Minigame::updateSequence(float dt, bool spacePressed, bool mousePressed, fl
             mShowResultTimer = 0.0f;
             mFlashAlpha = 0.6f; mFlashTimer = 0.0f; mFlashIsWin = false;
             mScreenShakeTimer = 0.3f;
-            if (mSoundsLoaded) ma_sound_start(&mLoseSound);
+            if (mSoundsLoaded) ma_sound_start(mLoseSound);
             return;
         }
     }
@@ -743,7 +750,7 @@ void Minigame::updateSequence(float dt, bool spacePressed, bool mousePressed, fl
                 mSequence.flashCell = cellIdx;
                 mSequence.flashTimer = 0.0f;
                 mSequence.cellGlow[cellIdx] = 1.0f;
-                if (mSoundsLoaded) ma_sound_start(&mFlipSound);
+                if (mSoundsLoaded) ma_sound_start(mFlipSound);
 
                 bool correctSoFar = true;
                 for (int j = 0; j <= mSequence.inputIndex; j++) {
@@ -761,7 +768,7 @@ void Minigame::updateSequence(float dt, bool spacePressed, bool mousePressed, fl
                     mShowResultTimer = 0.0f;
                     mFlashAlpha = 0.6f; mFlashTimer = 0.0f; mFlashIsWin = false;
                     mScreenShakeTimer = 0.3f;
-                    if (mSoundsLoaded) ma_sound_start(&mLoseSound);
+                    if (mSoundsLoaded) ma_sound_start(mLoseSound);
                     return;
                 }
 
@@ -774,7 +781,7 @@ void Minigame::updateSequence(float dt, bool spacePressed, bool mousePressed, fl
                         mState = MinigameState::Won;
                         mShowResultTimer = 0.0f;
                         mFlashAlpha = 0.6f; mFlashTimer = 0.0f; mFlashIsWin = true;
-                        if (mSoundsLoaded) ma_sound_start(&mWinSound);
+                        if (mSoundsLoaded) ma_sound_start(mWinSound);
                         for (int r2 = 0; r2 < 3; r2++) {
                             for (int c2 = 0; c2 < 3; c2++) {
                                 float px = startX + c2 * (boxSize + gap) + boxSize / 2.0f;
@@ -786,7 +793,7 @@ void Minigame::updateSequence(float dt, bool spacePressed, bool mousePressed, fl
                     }
                     addFloatingText(Localization::t(TextId::MinigameLevel) + std::to_string(mSequence.level + 1),
                         windowW / 2.0f - 40.0f, startY + totalH + 40.0f, 0.2f, 1.0f, 0.3f);
-                    if (mSoundsLoaded) ma_sound_start(&mWinSound);
+                    if (mSoundsLoaded) ma_sound_start(mWinSound);
                     mSequence.inputIndex = 0;
                     mSequence.showingSequence = true;
                     mSequence.waitingInput = false;
