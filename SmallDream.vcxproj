@@ -48,6 +48,7 @@
     <ClCompile Include="src\VisualNovel.cpp" />
     <ClCompile Include="src\Model.cpp" />
     <ClCompile Include="src\MeshCollider.cpp" />
+    <ClCompile Include="src\BodegaGame.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\include\Shader.h" />
@@ -59,6 +60,7 @@
     <ClInclude Include="src\include\VisualNovel.h" />
     <ClInclude Include="src\include\Model.h" />
     <ClInclude Include="src\include\MeshCollider.h" />
+    <ClInclude Include="src\include\BodegaGame.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\shaders\background.vert" />
@@ -77,11 +79,11 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(VcpkgRoot)installed\x64-windows\include;$(SolutionDir)src\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)vcpkg_installed\x64-windows\include;$(SolutionDir)src\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(VcpkgRoot)installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)vcpkg_installed\x64-windows\debug\lib;$(SolutionDir)vcpkg_installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3dll.lib;glad.lib;freetyped.lib;assimp-vc145-mtd.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -90,11 +92,11 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(VcpkgRoot)installed\x64-windows\include;$(SolutionDir)src\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)vcpkg_installed\x64-windows\include;$(SolutionDir)src\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(VcpkgRoot)installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)vcpkg_installed\x64-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3dll.lib;glad.lib;freetype.lib;assimp-vc145-mt.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -104,5 +106,13 @@
       <AssetFiles Include="$(SolutionDir)assets\**\*" />
     </ItemGroup>
     <Copy SourceFiles="@(AssetFiles)" DestinationFiles="$(TargetDir)assets\%(RecursiveDir)%(Filename)%(Extension)" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyDlls" AfterTargets="Build" Condition="$(VcpkgEnabled)=='true'">
+    <ItemGroup>
+      <VcpkgDllsDebug Include="$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\*.dll" />
+      <VcpkgDllsRelease Include="$(SolutionDir)vcpkg_installed\x64-windows\bin\*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(VcpkgDllsDebug)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'$(Configuration)'=='Debug'" />
+    <Copy SourceFiles="@(VcpkgDllsRelease)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'$(Configuration)'=='Release'" />
   </Target>
 </Project>

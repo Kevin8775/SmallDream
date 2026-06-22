@@ -24,6 +24,7 @@
 #include "Model.h"
 #include "MeshCollider.h"
 #include "Door.h"
+#include "BodegaGame.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -49,6 +50,7 @@ enum class AppState {
     Pause,
     HouseLoading,
     RoomLoading,
+    Bodega,
     HouseWalk
 };
 
@@ -68,6 +70,7 @@ static double gCreditsPauseStarted = 0.0;
 static double gCreditsPauseAccum = 0.0;
 static bool gStoryCloudOnly = false;
 static bool gHouseCapturedMouse = false;
+static bool bodegaMouseCaptured = false;
 static AppState gPauseReturnState = AppState::Menu;
 static bool gShowCollisionDebug = false;
 
@@ -291,10 +294,10 @@ static void renderSprite(GLuint vao, Shader& shader, Texture& tex, const glm::ma
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-        if (gStatePtr && (*gStatePtr == AppState::HouseWalk || *gStatePtr == AppState::VisualNovel)) {
+        if (gStatePtr && (*gStatePtr == AppState::HouseWalk || *gStatePtr == AppState::VisualNovel || *gStatePtr == AppState::Bodega)) {
             gPauseReturnState = *gStatePtr;
             *gStatePtr = AppState::Pause;
-            if (gPauseReturnState == AppState::HouseWalk) {
+            if (gPauseReturnState == AppState::HouseWalk || gPauseReturnState == AppState::Bodega) {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             }
             return;
@@ -303,6 +306,8 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
             *gStatePtr = gPauseReturnState;
             if (*gStatePtr == AppState::HouseWalk) {
                 gHouseCapturedMouse = false;
+            } else if (*gStatePtr == AppState::Bodega) {
+                    bodegaMouseCaptured = false;
             }
             return;
         }
@@ -552,7 +557,7 @@ int main() {
     puertas.push_back({glm::vec3(-17.284657f, -12.492844f, -36.773849f), tamanoPuerta, "Presiona E para entrar al cuarto", &cuartoCocina});
     puertas.push_back({glm::vec3(  9.757366f, -26.899001f, -20.823090f), tamanoPuerta, "Presiona E para entrar al garaje",  &cuartoGaraje});
     puertas.push_back({glm::vec3(  5.084099f, -26.899008f, -18.237707f), tamanoPuerta, "Presiona E para entrar al bano",    &cuartoBano});
-    puertas.push_back({glm::vec3(-19.860470f, -26.899998f, -18.824844f), tamanoPuerta, "Esta puerta se encuentra cerrada",   nullptr});
+    puertas.push_back({glm::vec3(-19.860470f, -26.899998f, -18.824844f), tamanoPuerta, "Presiona E para entrar a la bodega", nullptr, true});
     puertas.push_back({glm::vec3(-30.161835f, -12.492846f, -34.673336f), tamanoPuerta, "Completa las 3 habitaciones para desbloquear esta puerta", nullptr});
 
     // Cloud transition animation
@@ -585,6 +590,8 @@ int main() {
 
     VisualNovel* visualNovel = new VisualNovel(&textRenderer, &spriteShader, quadVAO, proj, WINDOW_WIDTH, WINDOW_HEIGHT);
     visualNovel->setSoundEngine(&engine);
+
+    BodegaGame bodegaGame;
 
     AppState state = AppState::Loading;
     gStatePtr = &state;
@@ -635,6 +642,9 @@ int main() {
                 puertas = puertasCasaRespaldo;
                 puertasCasaRespaldo.clear();
             }
+        } else if (gPauseReturnState == AppState::Bodega) {
+            bodegaGame.destroy();
+            bodegaMouseCaptured = false;
         } else if (gPauseReturnState == AppState::VisualNovel) {
             if (visualNovel) visualNovel->reset();
             dreamLoadingTimer = 0.0f;
@@ -1394,15 +1404,22 @@ int main() {
                 for (auto& puerta : puertas) {
                     glm::vec3 d = glm::abs(camPos - puerta.posicion);
                     if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
-                        if (eKeyDown && !puertaEKeyHeld && puerta.destino) {
-                            pendingRoomPath = puerta.destino->rutaModelo;
-                            pendingRoomSpawn = puerta.destino->puntoAparicion;
-                            state = AppState::RoomLoading;
-                            roomLoadingStarted = false;
-                            roomLoadingTimer = 0.0f;
-                            glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-                            gHouseCapturedMouse = false;
-                            break;
+                        if (eKeyDown && !puertaEKeyHeld) {
+                            if (puerta.esBodega) {
+                                bodegaGame.init(WINDOW_WIDTH, WINDOW_HEIGHT);
+                                bodegaMouseCaptured = false;
+                                state = AppState::Bodega;
+                                break;
+                            } else if (puerta.destino) {
+                                pendingRoomPath = puerta.destino->rutaModelo;
+                                pendingRoomSpawn = puerta.destino->puntoAparicion;
+                                state = AppState::RoomLoading;
+                                roomLoadingStarted = false;
+                                roomLoadingTimer = 0.0f;
+                                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                                gHouseCapturedMouse = false;
+                                break;
+                            }
                         }
                     }
                 }
@@ -1472,6 +1489,28 @@ int main() {
                     );
                     break;
                 }
+            }
+        } else if (state == AppState::Bodega) {
+            if (!bodegaMouseCaptured) {
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                bodegaMouseCaptured = true;
+                firstMouse = true;
+            }
+            bool wantsPause = bodegaGame.update(dt, gWindow, lastMouseX, lastMouseY, firstMouse);
+            if (wantsPause) {
+                gPauseReturnState = AppState::Bodega;
+                state = AppState::Pause;
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                bodegaMouseCaptured = false;
+            } else if (bodegaGame.wantsExit()) {
+                bodegaGame.destroy();
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                gHouseCapturedMouse = false;
+                state = AppState::HouseWalk;
+                firstMouse = true;
+            } else {
+                bodegaGame.render(modelShader, spriteShader, quadVAO,
+                                  textRenderer, proj, WINDOW_WIDTH, WINDOW_HEIGHT, *underlineTex);
             }
         } else if (state == AppState::DreamLoading) {
             dreamLoadingTimer += dt;
@@ -1593,6 +1632,8 @@ int main() {
                     state = gPauseReturnState;
                     if (state == AppState::HouseWalk) {
                         gHouseCapturedMouse = false;
+                    } else if (state == AppState::Bodega) {
+                        bodegaMouseCaptured = false;
                     }
                 } else if (menuHovered) {
                     returnToMenuFromPause();

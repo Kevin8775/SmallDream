@@ -13,4 +13,5 @@ struct Puerta {
     glm::vec3 tamano;
     std::string mensaje;
     Cuarto* destino;
+    bool esBodega = false;
 };
