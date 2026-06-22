@@ -454,8 +454,13 @@ int main() {
     const float houseTargetSize = 120.0f;
     float houseVerticalVelocity = 0.0f;
 
+<<<<<<< Updated upstream
     const float eyeHeight = 2.0f;
     const float playerRadius = 0.3f;
+=======
+    float eyeHeight = 2.0f;
+    float playerRadius = 0.3f;
+>>>>>>> Stashed changes
     MeshCollider houseCollider;
     // Door interaction system
     bool puertaEKeyHeld = false;
@@ -484,9 +489,41 @@ int main() {
             float floorY = minW.y + (maxW.y - minW.y) * 0.05f;
             float margin = 50.0f;
             houseCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
+
+            // One floor cap per ball — gaps preserved so player can fall through.
+            // Y = 1.35 → camera walks at ≈1.90 (1.35 + eyeHeight 0.55).
+            // X centers evenly spaced from first edge (-0.869) to last edge (3.785),
+            // half-width 0.35 leaves a ~0.23-unit gap between consecutive caps.
+            if (ruta.find("garage") != std::string::npos) {
+                const float ballFloorY = 1.35f;
+                const float halfW      = 0.35f;
+                const float zMin       = 8.3f;
+                const float zMax       = 9.4f;
+                const float cx[6] = { -0.869f, 0.062f, 0.993f, 1.924f, 2.855f, 3.786f };
+                for (float x : cx)
+                    houseCollider.addFloorCap(ballFloorY, x - halfW, x + halfW, zMin, zMax);
+            }
+
             houseCollider.build();
             camPos = spawn;
             houseVerticalVelocity = 0.0f;
+<<<<<<< Updated upstream
+=======
+            isInGarage = (ruta.find("garage") != std::string::npos);
+            // En el garaje el jugador es diminuto (parkour pequeno)
+            eyeHeight    = isInGarage ? 0.55f : 2.0f;
+            playerRadius = isInGarage ? 0.15f : 0.3f;
+            if (isInGarage) {
+                jumpCount = 0;
+            }
+
+            if (ruta.find("house") != std::string::npos) {
+                puertas = puertasCasaRespaldo;
+            } else {
+                if (puertasCasaRespaldo.empty()) puertasCasaRespaldo = puertas;
+                puertas.clear();
+            }
+>>>>>>> Stashed changes
         }
     };
     auto placeCameraInsideHouse = [&]() {
@@ -619,6 +656,20 @@ int main() {
             houseVerticalVelocity = 0.0f;
             gShowCollisionDebug = false;
             firstMouse = true;
+<<<<<<< Updated upstream
+=======
+            if (!puertasCasaRespaldo.empty()) {
+                puertas = puertasCasaRespaldo;
+                puertasCasaRespaldo.clear();
+            }
+        } else if (gPauseReturnState == AppState::Bodega) {
+            bodegaGame.destroy();
+            if (hasAmbientLoop) ma_sound_start(&ambientLoop);
+            bodegaMouseCaptured = false;
+        } else if (gPauseReturnState == AppState::Bano) {
+            banoGame.destroy();
+            banoMouseCaptured = false;
+>>>>>>> Stashed changes
         } else if (gPauseReturnState == AppState::VisualNovel) {
             if (visualNovel) visualNovel->reset();
             dreamLoadingTimer = 0.0f;
@@ -1250,12 +1301,29 @@ int main() {
             camFront = glm::normalize(front);
             glm::vec3 right = glm::normalize(glm::cross(camFront, camUp));
             bool sprinting = glfwGetKey(gWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+<<<<<<< Updated upstream
             float speed = 7.5f * dt * (sprinting ? 2.0f : 1.0f);
+=======
+>>>>>>> Stashed changes
             glm::vec3 move(0.0f);
-            if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) move += camFront * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) move -= camFront * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) move -= right * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) move += right * speed;
+            if (isInGarage) {
+                float spd = sprinting ? 2.5f : 1.5f;
+                // Movimiento horizontal (plano): saltar/mirar no altera la velocidad
+                glm::vec3 fwd = glm::normalize(glm::vec3(camFront.x, 0.0f, camFront.z));
+                glm::vec3 rgt = glm::normalize(glm::cross(fwd, camUp));
+                glm::vec3 dir(0.0f);
+                if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) dir += fwd;
+                if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) dir -= fwd;
+                if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) dir -= rgt;
+                if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) dir += rgt;
+                if (glm::length(dir) > 0.0001f) move = glm::normalize(dir) * spd * dt;
+            } else {
+                float speed = 7.5f * dt * (sprinting ? 2.0f : 1.0f);
+                if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) move += camFront * speed;
+                if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) move -= camFront * speed;
+                if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) move -= right * speed;
+                if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) move += right * speed;
+            }
 
             houseVerticalVelocity -= 9.8f * dt;
             move.y = houseVerticalVelocity * dt;
@@ -1277,7 +1345,11 @@ int main() {
             if (houseCollider.isBuilt()) {
                 glm::vec3 n; float p;
                 if (houseCollider.collideSphere(next, playerRadius, n, p)) {
-                    next.x = safePos.x; next.z = safePos.z;
+                    // In garage: if the push is mostly upward (top of a sphere/ball),
+                    // skip the horizontal revert — the vertical step will handle it.
+                    if (!(isInGarage && n.y > 0.4f)) {
+                        next.x = safePos.x; next.z = safePos.z;
+                    }
                 }
             }
 
@@ -1286,13 +1358,18 @@ int main() {
             if (houseCollider.isBuilt()) {
                 glm::vec3 n; float p;
                 if (houseCollider.collideSphere(next, playerRadius, n, p)) {
-                    next += n * (p + 0.001f);
+                    // In garage: only apply the push if it goes upward.
+                    // A downward push on landing edges causes an unpleasant "sink" effect.
+                    if (!isInGarage || n.y >= 0.0f) {
+                        next += n * (p + 0.001f);
+                        houseVerticalVelocity = 0.0f;
+                    }
                     next.x = safePos.x; next.z = safePos.z;
-                    houseVerticalVelocity = 0.0f;
                 }
             }
 
             float footY = next.y - eyeHeight;
+<<<<<<< Updated upstream
             bool grounded = footY <= floorY + 0.15f && (floorY - footY) < 2.0f;
             if (grounded) {
                 next.y = floorY + eyeHeight;
@@ -1300,6 +1377,29 @@ int main() {
                 if (glfwGetKey(gWindow, GLFW_KEY_SPACE) == GLFW_PRESS) {
                     houseVerticalVelocity = 5.0f;
                 }
+=======
+            // Mientras se sube (salto activo) NO se considera "en el suelo",
+            // de lo contrario el salto se cancela al instante por el ajuste al piso.
+            bool grounded = houseVerticalVelocity <= 0.0f
+                            && footY <= floorY + 0.15f && (floorY - footY) < 2.0f;
+            bool spaceDown = glfwGetKey(gWindow, GLFW_KEY_SPACE) == GLFW_PRESS;
+            bool spaceJustPressed = spaceDown && !spaceWasPressed;
+            spaceWasPressed = spaceDown;
+            float jumpVel = isInGarage ? 3.0f : 5.0f;
+            if (grounded) {
+                next.y = floorY + eyeHeight;
+                houseVerticalVelocity = 0.0f;
+                jumpCount = 0;
+                // En el garaje el salto se dispara al pulsar (permite doble salto limpio)
+                if (isInGarage ? spaceJustPressed : spaceDown) {
+                    houseVerticalVelocity = jumpVel;
+                    jumpCount = 1;
+                }
+            } else if (isInGarage && jumpCount < 2 && spaceJustPressed) {
+                // Doble salto
+                houseVerticalVelocity = jumpVel;
+                jumpCount++;
+>>>>>>> Stashed changes
             }
 
             if (!hasStepsSound) {
@@ -1325,6 +1425,10 @@ int main() {
                     if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
                         if (eKeyDown && !puertaEKeyHeld) {
                             if (puerta.esBodega) {
+<<<<<<< Updated upstream
+=======
+                                if (hasAmbientLoop) ma_sound_stop(&ambientLoop);
+>>>>>>> Stashed changes
                                 bodegaGame.init(WINDOW_WIDTH, WINDOW_HEIGHT, &engine);
                                 bodegaMouseCaptured = false;
                                 state = AppState::Bodega;
@@ -1417,6 +1521,7 @@ int main() {
                 bodegaMouseCaptured = false;
             } else if (bodegaGame.wantsExit()) {
                 bodegaGame.destroy();
+                if (hasAmbientLoop) ma_sound_start(&ambientLoop);
                 glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 gHouseCapturedMouse = false;
                 state = AppState::HouseWalk;
