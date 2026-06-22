@@ -160,6 +160,76 @@ std::string t(TextId id) {
         case TextId::HouseIntroDialog: return es
             ? "\u00bfEh...? \u00bfQu\u00e9 pas\u00f3?... Todo est\u00e1 tan oscuro... Y todo es enorme... No, espera... No es que sea enorme... Soy yo... \u00a1Me he encogido! Pero... \u00bfc\u00f3mo? \u00bfQu\u00e9 habr\u00e1 pasado?"
             : "Huh...? What happened?... Everything is so dark... And everything is huge... No, wait... It's not that it's huge... It's me... I've shrunk! But... how? What happened?";
+        case TextId::Dormitorio_Inspecionar: return es
+            ? "Presiona E para inspeccionar"
+            : "Press E to inspect";
+        case TextId::Dormitorio_PistaTitulo1: return es
+            ? "ESPEJO EMPA\u00d1ADO"
+            : "FOGGY MIRROR";
+        case TextId::Dormitorio_PistaTexto1: return es
+            ? "Alguien escribi\u00f3 en el espejo con aerosol:\n\n"
+              "El primer n\u00famero est\u00e1 marcado. El resto est\u00e1 borroso..."
+            : "Someone wrote on the mirror with spray:\n\n"
+              "The first number is marked. The rest is blurred...";
+        case TextId::Dormitorio_PistaTitulo2: return es
+            ? "LIBRO ANTIGUO"
+            : "OLD BOOK";
+        case TextId::Dormitorio_PistaTexto2: return es
+            ? "Abres el libro. Una p\u00e1gina est\u00e1 doblada:\n\n"
+              "\"P\u00e1gina 45 - A\u00f1o de fundaci\u00f3n: 1945\"\n\n"
+              "Alguien subray\u00f3 los n\u00fameros 9 y 5 con tinta roja.\n"
+              "En el margen: 'El segundo es 9, el cuarto es 5'."
+            : "You open the book. A page is folded:\n\n"
+              "\"Page 45 - Foundation year: 1945\"\n\n"
+              "Someone underlined the numbers 9 and 5 in red ink.\n"
+              "In the margin: 'The second is 9, the fourth is 5'.";
+        case TextId::Dormitorio_PistaTitulo3: return es
+            ? "DETR\u00c1S DEL CUADRO"
+            : "BEHIND THE PAINTING";
+        case TextId::Dormitorio_PistaTexto3: return es
+            ? "Detr\u00e1s del cuadro hay un mensaje raspado en la pared:\n\n"
+              "    \"TERCER D\u00cdGITO = 4\"\n\n"
+              "Parece que alguien lo escribi\u00f3 apresuradamente."
+            : "Behind the painting there's a message scratched on the wall:\n\n"
+              "    \"THIRD DIGIT = 4\"\n\n"
+              "Looks like someone wrote it in a hurry.";
+        case TextId::Dormitorio_PistaTitulo4: return es
+            ? "NOTA DEBAJO DE LAS MANZANAS"
+            : "NOTE UNDER THE APPLES";
+        case TextId::Dormitorio_PistaTexto4: return es
+            ? "Debajo de las manzanas hay una nota arrugada:\n\n"
+              "\"Quedan 4. Ya encontr\u00e9 el 1, el 9 y el 5.\"\n"
+              "\"Solo falta el \u00faltimo... Espera, \u00bfo ya lo encontr\u00e9?\"\n\n"
+              "Parece que alguien m\u00e1s estuvo aqu\u00ed antes."
+            : "Under the apples there's a crumpled note:\n\n"
+              "\"4 left. I already found 1, 9 and 5.\"\n"
+              "\"Just the last one... Wait, or did I already find it?\"\n\n"
+              "Looks like someone else was here before.";
+        case TextId::Dormitorio_PistaTitulo5: return es
+            ? "BASE DE LA L\u00c1MPARA"
+            : "LAMP BASE";
+        case TextId::Dormitorio_PistaTexto5: return es
+            ? "La base de la l\u00e1mpara tiene n\u00fameros grabados:\n\n"
+              "    [ 1 ] - [ 9 ] - [ 4 ] - [ 5 ]\n\n"
+              "Parece ser el c\u00f3digo completo. Alguien lo dej\u00f3 grabado aqu\u00ed."
+            : "The lamp base has engraved numbers:\n\n"
+              "    [ 1 ] - [ 9 ] - [ 4 ] - [ 5 ]\n\n"
+              "It seems to be the complete code. Someone left it engraved here.";
+        case TextId::Dormitorio_PanelTitulo: return es
+            ? "PANEL DE C\u00d3DIGO"
+            : "CODE PANEL";
+        case TextId::Dormitorio_CodigoError: return es
+            ? "\u00a1C\u00d3DIGO INCORRECTO!"
+            : "INCORRECT CODE!";
+        case TextId::Dormitorio_CodigoCorrecto: return es
+            ? "\u00a1HAS ESCAPADO!"
+            : "YOU ESCAPED!";
+        case TextId::Dormitorio_Progreso: return es
+            ? "Pistas: %d / %d"
+            : "Clues: %d / %d";
+        case TextId::Dormitorio_SalirInstruccion: return es
+            ? "Presiona E o ESC para cerrar"
+            : "Press E or ESC to close";
     }
     return "";
 }

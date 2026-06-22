@@ -50,6 +50,7 @@
     <ClCompile Include="src\MeshCollider.cpp" />
     <ClCompile Include="src\BodegaGame.cpp" />
     <ClCompile Include="src\BanoGame.cpp" />
+    <ClCompile Include="src\EscapeRoom.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\include\Shader.h" />
@@ -63,6 +64,7 @@
     <ClInclude Include="src\include\MeshCollider.h" />
     <ClInclude Include="src\include\BodegaGame.h" />
     <ClInclude Include="src\include\BanoGame.h" />
+    <ClInclude Include="src\include\EscapeRoom.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\shaders\background.vert" />

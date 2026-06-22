@@ -26,6 +26,7 @@
 #include "Door.h"
 #include "BodegaGame.h"
 #include "BanoGame.h"
+#include "EscapeRoom.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -53,6 +54,7 @@ enum class AppState {
     RoomLoading,
     Bodega,
     Bano,
+    DormitorioEscape,
     HouseWalk
 };
 
@@ -344,10 +346,10 @@ static void renderSprite(GLuint vao, Shader& shader, Texture& tex, const glm::ma
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-        if (gStatePtr && (*gStatePtr == AppState::HouseWalk || *gStatePtr == AppState::VisualNovel || *gStatePtr == AppState::Bodega || *gStatePtr == AppState::Bano)) {
+        if (gStatePtr && (*gStatePtr == AppState::HouseWalk || *gStatePtr == AppState::VisualNovel || *gStatePtr == AppState::Bodega || *gStatePtr == AppState::Bano || *gStatePtr == AppState::DormitorioEscape)) {
             gPauseReturnState = *gStatePtr;
             *gStatePtr = AppState::Pause;
-            if (gPauseReturnState == AppState::HouseWalk || gPauseReturnState == AppState::Bodega || gPauseReturnState == AppState::Bano) {
+            if (gPauseReturnState == AppState::HouseWalk || gPauseReturnState == AppState::Bodega || gPauseReturnState == AppState::Bano || gPauseReturnState == AppState::DormitorioEscape) {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             }
             return;
@@ -360,6 +362,8 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
                     bodegaMouseCaptured = false;
             } else if (*gStatePtr == AppState::Bano) {
                     banoMouseCaptured = false;
+            } else if (*gStatePtr == AppState::DormitorioEscape) {
+                    gHouseCapturedMouse = false;
             }
             return;
         }
@@ -522,6 +526,7 @@ int main() {
     std::vector<Puerta> puertasCasaRespaldo;
     std::string pendingRoomPath;
     glm::vec3 pendingRoomSpawn;
+    EscapeRoom escapeRoom;
     bool roomLoadingStarted = false;
     float roomLoadingTimer = 0.0f;
 
@@ -609,7 +614,7 @@ int main() {
 
     // Door data configuration
     cuartoDormitorio.rutaModelo = "assets/models/bedroom/scene.gltf";
-    cuartoDormitorio.puntoAparicion = glm::vec3(0.0f, 0.0f, 0.0f);
+    cuartoDormitorio.puntoAparicion = glm::vec3(-8.010325f, -10.209679f, -12.591578f);
     cuartoGaraje.rutaModelo = "assets/models/garage_parkour/garaje.gltf";
     cuartoGaraje.puntoAparicion = glm::vec3(0.0f, 1.8f, 0.0f);
     cuartoBano.rutaModelo = "assets/models/bano/scene.gltf";       // <<< CAMBIAR
@@ -650,6 +655,7 @@ int main() {
     bool hasStepsSound = false;
     bool tecladoPlayed = false;
     bool prevMouseDown = false;
+    bool prevRightMouseDown = false;
 
     VisualNovel* visualNovel = new VisualNovel(&textRenderer, &spriteShader, quadVAO, proj, WINDOW_WIDTH, WINDOW_HEIGHT);
     visualNovel->setSoundEngine(&engine);
@@ -713,6 +719,26 @@ int main() {
         } else if (gPauseReturnState == AppState::Bano) {
             banoGame.destroy();
             banoMouseCaptured = false;
+        } else if (gPauseReturnState == AppState::DormitorioEscape) {
+            escapeRoom.destroy();
+            gHouseCapturedMouse = false;
+            if (hasStepsSound) {
+                ma_sound_stop(&stepsSound);
+                ma_sound_uninit(&stepsSound);
+                hasStepsSound = false;
+            }
+            houseCollider.destroy();
+            houseModel.destroy();
+            houseLoaded = false;
+            roomLoadingStarted = false;
+            roomLoadingTimer = 0.0f;
+            houseVerticalVelocity = 0.0f;
+            gShowCollisionDebug = false;
+            firstMouse = true;
+            if (!puertasCasaRespaldo.empty()) {
+                puertas = puertasCasaRespaldo;
+                puertasCasaRespaldo.clear();
+            }
         } else if (gPauseReturnState == AppState::VisualNovel) {
             if (visualNovel) visualNovel->reset();
             dreamLoadingTimer = 0.0f;
@@ -754,6 +780,10 @@ int main() {
         bool mouseDown = glfwGetMouseButton(gWindow, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
         bool mouseJustPressed = mouseDown && !prevMouseDown;
         prevMouseDown = mouseDown;
+
+        bool rightMouseDown = glfwGetMouseButton(gWindow, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+        bool rightMouseJustPressed = rightMouseDown && !prevRightMouseDown;
+        prevRightMouseDown = rightMouseDown;
 
         if (state == AppState::Loading) {
             loadingPulse += dt * 4.0f;
@@ -1341,7 +1371,13 @@ int main() {
             }
 
             if (p >= 1.0f) {
-                state = AppState::HouseWalk;
+                if (pendingRoomPath.find("bedroom") != std::string::npos) {
+                    escapeRoom.init();
+                    puertaEKeyHeld = false;
+                    state = AppState::DormitorioEscape;
+                } else {
+                    state = AppState::HouseWalk;
+                }
                 roomLoadingStarted = false;
                 firstMouse = true;
             }
@@ -1684,6 +1720,245 @@ int main() {
                 banoGame.render(modelShader, spriteShader, quadVAO,
                                 textRenderer, proj, WINDOW_WIDTH, WINDOW_HEIGHT, *underlineTex);
             }
+        } else if (state == AppState::DormitorioEscape) {
+            if (!gHouseCapturedMouse) {
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                gHouseCapturedMouse = true;
+                firstMouse = true;
+            }
+
+            bool uiBloquea = (escapeRoom.fase() == EscapeRoom::Fase::IngresandoCodigo)
+                          || escapeRoom.inventarioAbierto();
+
+            // Mouse look (bloqueado si interfaz activa)
+            double mx, my;
+            glfwGetCursorPos(gWindow, &mx, &my);
+            if (firstMouse) {
+                lastMouseX = mx;
+                lastMouseY = my;
+                firstMouse = false;
+            }
+            if (!uiBloquea) {
+                double xoffset = mx - lastMouseX;
+                double yoffset = lastMouseY - my;
+                lastMouseX = mx;
+                lastMouseY = my;
+                camYaw += (float)xoffset * 0.1f;
+                camPitch += (float)yoffset * 0.1f;
+                camPitch = std::max(-89.0f, std::min(89.0f, camPitch));
+            } else {
+                lastMouseX = mx;
+                lastMouseY = my;
+            }
+
+            glm::vec3 front;
+            front.x = cos(glm::radians(camYaw)) * cos(glm::radians(camPitch));
+            front.y = sin(glm::radians(camPitch));
+            front.z = sin(glm::radians(camYaw)) * cos(glm::radians(camPitch));
+            camFront = glm::normalize(front);
+
+            // WASD movement
+            glm::vec3 move(0.0f);
+            bool sprinting = false;
+            bool grounded = false;
+            float floorY = 0.0f;
+            if (!uiBloquea) {
+            float speed = 7.5f * dt;
+            sprinting = glfwGetKey(gWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+            if (sprinting) speed *= 2.0f;
+            glm::vec3 right = glm::normalize(glm::cross(camFront, camUp));
+            if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) move += camFront * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) move -= camFront * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) move -= right * speed;
+            if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) move += right * speed;
+
+            // Gravity + jump
+            grounded = false;
+            floorY = 0.0f;
+            if (houseLoaded) {
+                floorY = houseCollider.getFloorHeight(camPos) + 1.7f;
+                grounded = (camPos.y <= floorY + 0.15f && houseVerticalVelocity < 2.0f);
+            }
+            if (grounded) {
+                houseVerticalVelocity = 0.0f;
+                camPos.y = floorY;
+                if (glfwGetKey(gWindow, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceWasPressed) {
+                    houseVerticalVelocity = 5.0f;
+                    spaceWasPressed = true;
+                }
+            } else {
+                houseVerticalVelocity -= 9.8f * dt;
+            }
+            if (glfwGetKey(gWindow, GLFW_KEY_SPACE) != GLFW_PRESS) spaceWasPressed = false;
+            if (!grounded) move.y = houseVerticalVelocity * dt;
+
+            // Collision (same as HouseWalk)
+            glm::vec3 safePos = camPos;
+            glm::vec3 next = safePos;
+            if (houseCollider.isBuilt()) {
+                glm::vec3 n; float p;
+                next.x += move.x; next.z += move.z;
+                if (houseCollider.collideSphere(next, playerRadius, n, p)) {
+                    next.x = safePos.x; next.z = safePos.z;
+                }
+                next.y += move.y;
+                if (houseCollider.collideSphere(next, playerRadius, n, p)) {
+                    next += n * (p + 0.001f);
+                    next.x = safePos.x; next.z = safePos.z;
+                    if (move.y < 0.0f) houseVerticalVelocity = 0.0f;
+                }
+            } else {
+                next += move;
+            }
+            camPos = next;
+            } // fin uiBloquea
+
+            // Input for escape room
+            bool eKeyDownEscape = glfwGetKey(gWindow, GLFW_KEY_E) == GLFW_PRESS;
+            bool qKeyDown = glfwGetKey(gWindow, GLFW_KEY_Q) == GLFW_PRESS;
+            bool leftArrow = glfwGetKey(gWindow, GLFW_KEY_LEFT) == GLFW_PRESS;
+            bool rightArrow = glfwGetKey(gWindow, GLFW_KEY_RIGHT) == GLFW_PRESS;
+            bool upArrow = glfwGetKey(gWindow, GLFW_KEY_UP) == GLFW_PRESS;
+            bool downArrow = glfwGetKey(gWindow, GLFW_KEY_DOWN) == GLFW_PRESS;
+            bool escKeyEscape = glfwGetKey(gWindow, GLFW_KEY_ESCAPE) == GLFW_PRESS;
+
+            escapeRoom.update(dt, camPos, eKeyDownEscape, qKeyDown, rightMouseJustPressed,
+                              leftArrow, rightArrow, upArrow, downArrow, escKeyEscape);
+
+            // Check exit
+            if (escapeRoom.quiereSalir()) {
+                escapeRoom.destroy();
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                gHouseCapturedMouse = false;
+                houseCollider.destroy();
+                houseModel.destroy();
+                houseLoaded = false;
+                roomLoadingStarted = false;
+                roomLoadingTimer = 0.0f;
+                houseVerticalVelocity = 0.0f;
+                gShowCollisionDebug = false;
+                firstMouse = true;
+                if (!puertasCasaRespaldo.empty()) {
+                    puertas = puertasCasaRespaldo;
+                    puertasCasaRespaldo.clear();
+                }
+                state = AppState::HouseWalk;
+            }
+
+            // Footsteps
+            if (houseLoaded) {
+                bool moving = (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS ||
+                               glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS ||
+                               glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS ||
+                               glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS);
+                if (moving && grounded) {
+                    if (!hasStepsSound) {
+                        hasStepsSound = ma_sound_init_from_file(&engine, "assets/sounds/effects/steps.wav", 0, nullptr, nullptr, &stepsSound) == MA_SUCCESS;
+                    }
+                    if (hasStepsSound && !ma_sound_is_playing(&stepsSound)) {
+                        ma_sound_start(&stepsSound);
+                    }
+                    if (hasStepsSound) {
+                        ma_sound_set_pitch(&stepsSound, sprinting ? 1.8f : 1.0f);
+                    }
+                } else if (hasStepsSound && ma_sound_is_playing(&stepsSound)) {
+                    ma_sound_stop(&stepsSound);
+                }
+            }
+
+            // ── 3D Rendering ──
+            glDisable(GL_CULL_FACE);
+            glEnable(GL_DEPTH_TEST);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glm::mat4 view = glm::lookAt(camPos, camPos + camFront, camUp);
+            glm::mat4 projection = glm::perspective(glm::radians(70.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.05f, 500.0f);
+
+            if (skyboxHouseTex) {
+                glDepthFunc(GL_LEQUAL);
+                glm::mat4 skyView = glm::mat4(glm::mat3(view));
+                skyboxShader.use();
+                skyboxShader.setMat4("uProjection", glm::value_ptr(projection));
+                skyboxShader.setMat4("uView", glm::value_ptr(skyView));
+                skyboxShader.setMat4("uModel", glm::value_ptr(glm::mat4(1.0f)));
+                skyboxShader.setInt("uSkybox", 0);
+                skyboxHouseTex->bind(0);
+                glBindVertexArray(skyboxVAO);
+                glDrawArrays(GL_TRIANGLES, 0, 36);
+                glDepthFunc(GL_LESS);
+            }
+
+            glm::mat4 modelMat = glm::translate(glm::mat4(1.0f), housePos);
+            modelMat = glm::translate(modelMat, -houseCenter);
+            modelMat = glm::scale(modelMat, glm::vec3(houseModelScale));
+
+            modelShader.use();
+            modelShader.setMat4("uProjection", glm::value_ptr(projection));
+            modelShader.setMat4("uView", glm::value_ptr(view));
+            modelShader.setMat4("uModel", glm::value_ptr(modelMat));
+            modelShader.setVec3("uViewPos", camPos.x, camPos.y, camPos.z);
+            modelShader.setVec3("uSunDir", -0.3f, -0.8f, -0.5f);
+            modelShader.setVec3("uSunColor", 0.9f, 0.85f, 0.7f);
+            modelShader.setFloat("uSunIntensity", 0.8f);
+            modelShader.setVec3("uFillLightDir", -0.6f, 0.1f, 0.8f);
+            modelShader.setVec3("uFillLightColor", 0.3f, 0.4f, 0.7f);
+            modelShader.setFloat("uFillLightIntensity", 0.5f);
+            modelShader.setFloat("uShininess", 24.0f);
+            modelShader.setFloat("uSpecIntensity", 0.25f);
+            if (houseLoaded) {
+                houseModel.draw(modelShader, view, projection, modelMat);
+                if (gShowCollisionDebug) {
+                    glEnable(GL_DEPTH_TEST);
+                    houseCollider.drawDebug(modelShader, view, projection);
+                }
+            }
+
+            // ── 2D Overlay ──
+            glDisable(GL_DEPTH_TEST);
+
+            // Position debug
+            textRenderer.renderText(
+                "POS: " + std::to_string(camPos.x) + ", " + std::to_string(camPos.y) + ", " + std::to_string(camPos.z),
+                20.0f, 20.0f, 0.45f, glm::vec3(0.2f, 1.0f, 0.2f));
+
+            // Proximity messages (like door prompts)
+            if (escapeRoom.fase() == EscapeRoom::Fase::Explorando) {
+                // Check objects
+                for (const auto& obj : escapeRoom.objetos()) {
+                    glm::vec3 d = glm::abs(camPos - obj.posicion);
+                    if (d.x < obj.tamano.x && d.y < obj.tamano.y && d.z < obj.tamano.z) {
+                        if (!obj.encontrado) {
+                            glm::vec2 msgSz = textRenderer.getTextSize(obj.mensajeAccion, 0.5f);
+                            textRenderer.renderText(
+                                obj.mensajeAccion,
+                                (WINDOW_WIDTH - msgSz.x) / 2.0f, WINDOW_HEIGHT * 0.55f,
+                                0.5f, glm::vec3(1.0f, 0.95f, 0.8f));
+                        }
+                        break;
+                    }
+                }
+                // Check panel proximity
+                if (escapeRoom.checkPanelProximity(camPos)) {
+                    std::string panelMsg = "Presiona E para ingresar el codigo";
+                    glm::vec2 msgSz = textRenderer.getTextSize(panelMsg, 0.5f);
+                    textRenderer.renderText(
+                        panelMsg,
+                        (WINDOW_WIDTH - msgSz.x) / 2.0f, WINDOW_HEIGHT * 0.55f,
+                        0.5f, glm::vec3(0.45f, 0.72f, 0.85f));
+                }
+                // Progress HUD
+                std::string progStr = "Pistas: " + std::to_string(escapeRoom.pistasEncontradas()) + " / " + std::to_string(escapeRoom.totalPistas()) + "  [Q] Inventario";
+                textRenderer.renderText(progStr, 20.0f, 85.0f, 0.35f, glm::vec3(0.85f, 0.75f, 0.45f));
+            }
+
+            // EscapeRoom overlay (clue text, code panel, completion)
+            {
+                glEnable(GL_DEPTH_TEST);
+                escapeRoom.render(modelShader, view, projection,
+                                  spriteShader, quadVAO, textRenderer, proj,
+                                  WINDOW_WIDTH, WINDOW_HEIGHT, *underlineTex);
+                glDisable(GL_DEPTH_TEST);
+            }
+
         } else if (state == AppState::DreamLoading) {
             dreamLoadingTimer += dt;
 
@@ -1808,6 +2083,8 @@ int main() {
                         bodegaMouseCaptured = false;
                     } else if (state == AppState::Bano) {
                         banoMouseCaptured = false;
+                    } else if (state == AppState::DormitorioEscape) {
+                        gHouseCapturedMouse = false;
                     }
                 } else if (menuHovered) {
                     returnToMenuFromPause();
