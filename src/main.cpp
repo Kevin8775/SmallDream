@@ -25,6 +25,7 @@
 #include "MeshCollider.h"
 #include "Door.h"
 #include "BodegaGame.h"
+#include "BanoGame.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -51,6 +52,7 @@ enum class AppState {
     HouseLoading,
     RoomLoading,
     Bodega,
+    Bano,
     HouseWalk
 };
 
@@ -71,6 +73,7 @@ static double gCreditsPauseAccum = 0.0;
 static bool gStoryCloudOnly = false;
 static bool gHouseCapturedMouse = false;
 static bool bodegaMouseCaptured = false;
+static bool banoMouseCaptured = false;
 static AppState gPauseReturnState = AppState::Menu;
 static bool gShowCollisionDebug = false;
 
@@ -294,10 +297,10 @@ static void renderSprite(GLuint vao, Shader& shader, Texture& tex, const glm::ma
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-        if (gStatePtr && (*gStatePtr == AppState::HouseWalk || *gStatePtr == AppState::VisualNovel || *gStatePtr == AppState::Bodega)) {
+        if (gStatePtr && (*gStatePtr == AppState::HouseWalk || *gStatePtr == AppState::VisualNovel || *gStatePtr == AppState::Bodega || *gStatePtr == AppState::Bano)) {
             gPauseReturnState = *gStatePtr;
             *gStatePtr = AppState::Pause;
-            if (gPauseReturnState == AppState::HouseWalk || gPauseReturnState == AppState::Bodega) {
+            if (gPauseReturnState == AppState::HouseWalk || gPauseReturnState == AppState::Bodega || gPauseReturnState == AppState::Bano) {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             }
             return;
@@ -308,6 +311,8 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
                 gHouseCapturedMouse = false;
             } else if (*gStatePtr == AppState::Bodega) {
                     bodegaMouseCaptured = false;
+            } else if (*gStatePtr == AppState::Bano) {
+                    banoMouseCaptured = false;
             }
             return;
         }
@@ -556,7 +561,7 @@ int main() {
 
     puertas.push_back({glm::vec3(-17.284657f, -12.492844f, -36.773849f), tamanoPuerta, "Presiona E para entrar al cuarto", &cuartoCocina});
     puertas.push_back({glm::vec3(  9.757366f, -26.899001f, -20.823090f), tamanoPuerta, "Presiona E para entrar al garaje",  &cuartoGaraje});
-    puertas.push_back({glm::vec3(  5.084099f, -26.899008f, -18.237707f), tamanoPuerta, "Presiona E para entrar al bano",    &cuartoBano});
+    puertas.push_back({glm::vec3(  5.084099f, -26.899008f, -18.237707f), tamanoPuerta, "Presiona E para entrar al bano",    nullptr, false, true});
     puertas.push_back({glm::vec3(-19.860470f, -26.899998f, -18.824844f), tamanoPuerta, "Presiona E para entrar a la bodega", nullptr, true});
     puertas.push_back({glm::vec3(-30.161835f, -12.492846f, -34.673336f), tamanoPuerta, "Completa las 3 habitaciones para desbloquear esta puerta", nullptr});
 
@@ -592,6 +597,8 @@ int main() {
     visualNovel->setSoundEngine(&engine);
 
     BodegaGame bodegaGame;
+
+    BanoGame banoGame;
 
     AppState state = AppState::Loading;
     gStatePtr = &state;
@@ -645,6 +652,9 @@ int main() {
         } else if (gPauseReturnState == AppState::Bodega) {
             bodegaGame.destroy();
             bodegaMouseCaptured = false;
+        } else if (gPauseReturnState == AppState::Bano) {
+            banoGame.destroy();
+            banoMouseCaptured = false;
         } else if (gPauseReturnState == AppState::VisualNovel) {
             if (visualNovel) visualNovel->reset();
             dreamLoadingTimer = 0.0f;
@@ -1410,6 +1420,11 @@ int main() {
                                 bodegaMouseCaptured = false;
                                 state = AppState::Bodega;
                                 break;
+                            } else if (puerta.esBano) {
+                                banoGame.init(WINDOW_WIDTH, WINDOW_HEIGHT);
+                                banoMouseCaptured = false;
+                                state = AppState::Bano;
+                                break;
                             } else if (puerta.destino) {
                                 pendingRoomPath = puerta.destino->rutaModelo;
                                 pendingRoomSpawn = puerta.destino->puntoAparicion;
@@ -1511,6 +1526,28 @@ int main() {
             } else {
                 bodegaGame.render(modelShader, spriteShader, quadVAO,
                                   textRenderer, proj, WINDOW_WIDTH, WINDOW_HEIGHT, *underlineTex);
+            }
+        } else if (state == AppState::Bano) {
+            if (!banoMouseCaptured) {
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                banoMouseCaptured = true;
+                firstMouse = true;
+            }
+            bool wantsPause = banoGame.update(dt, gWindow, lastMouseX, lastMouseY, firstMouse);
+            if (wantsPause) {
+                gPauseReturnState = AppState::Bano;
+                state = AppState::Pause;
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                banoMouseCaptured = false;
+            } else if (banoGame.wantsExit()) {
+                banoGame.destroy();
+                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                gHouseCapturedMouse = false;
+                state = AppState::HouseWalk;
+                firstMouse = true;
+            } else {
+                banoGame.render(modelShader, spriteShader, quadVAO,
+                                textRenderer, proj, WINDOW_WIDTH, WINDOW_HEIGHT, *underlineTex);
             }
         } else if (state == AppState::DreamLoading) {
             dreamLoadingTimer += dt;
@@ -1634,6 +1671,8 @@ int main() {
                         gHouseCapturedMouse = false;
                     } else if (state == AppState::Bodega) {
                         bodegaMouseCaptured = false;
+                    } else if (state == AppState::Bano) {
+                        banoMouseCaptured = false;
                     }
                 } else if (menuHovered) {
                     returnToMenuFromPause();
