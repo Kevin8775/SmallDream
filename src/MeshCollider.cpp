@@ -116,8 +116,64 @@ void MeshCollider::addFloorQuad(float y, float xMin, float xMax, float zMin, flo
     mTriangles.push_back(t1); mTriToMesh.push_back(meshIdx);
 }
 
+void MeshCollider::addFloorCap(float y, float xMin, float xMax, float zMin, float zMax) {
+    glm::vec3 center((xMin + xMax) * 0.5f, y, (zMin + zMax) * 0.5f);
+    float rx = (xMax - xMin) * 0.5f;
+    float rz = (zMax - zMin) * 0.5f;
+    MeshCollisionInfo info;
+    info.center = center;
+    info.radius = std::sqrt(rx * rx + rz * rz);
+    mMeshInfos.push_back(info);
+    int meshIdx = (int)mMeshInfos.size() - 1;
+
+    CollisionTriangle t0, t1;
+    t0.v0 = glm::vec3(xMin, y, zMin);
+    t0.v1 = glm::vec3(xMax, y, zMax);
+    t0.v2 = glm::vec3(xMax, y, zMin);
+    t1.v0 = glm::vec3(xMin, y, zMin);
+    t1.v1 = glm::vec3(xMin, y, zMax);
+    t1.v2 = glm::vec3(xMax, y, zMax);
+    mTriangles.push_back(t0); mTriToMesh.push_back(meshIdx);
+    mTriangles.push_back(t1); mTriToMesh.push_back(meshIdx);
+}
+
 void MeshCollider::build() {
     if (mTriangles.empty()) return;
+
+    // Rebuild clusters from ALL meshInfos (including any added via addFloorQuad
+    // or addFloorCap after addModel). addModel builds clusters only for its own
+    // meshes, so floor quads/caps added later are excluded without this step.
+    mClusters.clear();
+    for (int i = 0; i < (int)mMeshInfos.size(); ++i) {
+        bool added = false;
+        for (auto& cluster : mClusters) {
+            float dist = glm::distance(mMeshInfos[i].center, cluster.center);
+            if (dist < CLUSTER_DISTANCE) {
+                cluster.meshIndices.push_back(i);
+                added = true;
+                break;
+            }
+        }
+        if (!added) {
+            MeshCluster c;
+            c.center = mMeshInfos[i].center;
+            c.radius = mMeshInfos[i].radius;
+            c.meshIndices.push_back(i);
+            mClusters.push_back(c);
+        }
+    }
+    for (auto& cluster : mClusters) {
+        glm::vec3 sum(0.0f);
+        for (int idx : cluster.meshIndices)
+            sum += mMeshInfos[idx].center;
+        cluster.center = sum / (float)cluster.meshIndices.size();
+        float maxDist = 0.0f;
+        for (int idx : cluster.meshIndices) {
+            float d = glm::length(cluster.center - mMeshInfos[idx].center) + mMeshInfos[idx].radius;
+            if (d > maxDist) maxDist = d;
+        }
+        cluster.radius = maxDist;
+    }
 
     if (mDebugVAO) glDeleteVertexArrays(1, &mDebugVAO);
     if (mDebugVBO) glDeleteBuffers(1, &mDebugVBO);
@@ -287,6 +343,7 @@ bool MeshCollider::collideSphere(const glm::vec3& center, float radius,
                     float tnLen = glm::length(tn);
                     if (tnLen > 1e-8f) {
                         float ny = tn.y / tnLen;
+                        if (ny < -0.15f) continue;
                         if (ny > 0.3f) {
                             glm::vec3 planeN = tn / tnLen;
                             if (glm::dot(planeN, center - tri.v0) < 0.0f) continue;

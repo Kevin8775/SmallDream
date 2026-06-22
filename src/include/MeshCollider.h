@@ -29,6 +29,7 @@ public:
 
     void addModel(const Model& model, const glm::mat4& transform = glm::mat4(1.0f));
     void addFloorQuad(float y, float xMin, float xMax, float zMin, float zMax);
+    void addFloorCap(float y, float xMin, float xMax, float zMin, float zMax);
     void build();
 
     bool collideSphere(const glm::vec3& center, float radius,

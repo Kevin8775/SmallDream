@@ -515,7 +515,7 @@ int main() {
     bool spaceWasPressed = false;
 
     float eyeHeight = 2.0f;
-    const float playerRadius = 0.3f;
+    float playerRadius = 0.3f;
     MeshCollider houseCollider;
     // Door interaction system
     bool puertaEKeyHeld = false;
@@ -561,11 +561,23 @@ int main() {
             float floorY = minW.y + (maxW.y - minW.y) * 0.05f;
             float margin = 50.0f;
             houseCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
+
+            if (ruta.find("garage") != std::string::npos) {
+                const float ballFloorY = 1.35f;
+                const float halfW      = 0.35f;
+                const float zMin       = 8.3f;
+                const float zMax       = 9.4f;
+                const float cx[6] = { -0.869f, 0.062f, 0.993f, 1.924f, 2.855f, 3.786f };
+                for (float x : cx)
+                    houseCollider.addFloorCap(ballFloorY, x - halfW, x + halfW, zMin, zMax);
+            }
+
             houseCollider.build();
             camPos = spawn;
             houseVerticalVelocity = 0.0f;
             isInGarage = (ruta.find("garage") != std::string::npos);
-            eyeHeight = isInGarage ? 1.2f : 2.0f;
+            eyeHeight    = isInGarage ? 0.55f : 2.0f;
+            playerRadius = isInGarage ? 0.15f : 0.3f;
 
             if (ruta.find("house") != std::string::npos) {
                 puertas = puertasCasaRespaldo;
@@ -715,6 +727,7 @@ int main() {
             }
         } else if (gPauseReturnState == AppState::Bodega) {
             bodegaGame.destroy();
+            if (hasAmbientLoop) ma_sound_start(&ambientLoop);
             bodegaMouseCaptured = false;
         } else if (gPauseReturnState == AppState::Bano) {
             banoGame.destroy();
@@ -1445,12 +1458,24 @@ int main() {
             camFront = glm::normalize(front);
             glm::vec3 right = glm::normalize(glm::cross(camFront, camUp));
             bool sprinting = glfwGetKey(gWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
-            float speed = 7.5f * dt * (sprinting ? 2.0f : 1.0f) * (isInGarage ? 0.4f : 1.0f);
             glm::vec3 move(0.0f);
-            if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) move += camFront * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) move -= camFront * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) move -= right * speed;
-            if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) move += right * speed;
+            if (isInGarage) {
+                float spd = sprinting ? 2.5f : 1.5f;
+                glm::vec3 fwd = glm::normalize(glm::vec3(camFront.x, 0.0f, camFront.z));
+                glm::vec3 rgt = glm::normalize(glm::cross(fwd, camUp));
+                glm::vec3 dir(0.0f);
+                if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) dir += fwd;
+                if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) dir -= fwd;
+                if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) dir -= rgt;
+                if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) dir += rgt;
+                if (glm::length(dir) > 0.0001f) move = glm::normalize(dir) * spd * dt;
+            } else {
+                float speed = 7.5f * dt * (sprinting ? 2.0f : 1.0f);
+                if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) move += camFront * speed;
+                if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) move -= camFront * speed;
+                if (glfwGetKey(gWindow, GLFW_KEY_A) == GLFW_PRESS) move -= right * speed;
+                if (glfwGetKey(gWindow, GLFW_KEY_D) == GLFW_PRESS) move += right * speed;
+            }
 
             houseVerticalVelocity -= 9.8f * dt;
             move.y = houseVerticalVelocity * dt;
@@ -1472,7 +1497,9 @@ int main() {
             if (houseCollider.isBuilt()) {
                 glm::vec3 n; float p;
                 if (houseCollider.collideSphere(next, playerRadius, n, p)) {
-                    next.x = safePos.x; next.z = safePos.z;
+                    if (!(isInGarage && n.y > 0.4f)) {
+                        next.x = safePos.x; next.z = safePos.z;
+                    }
                 }
             }
 
@@ -1481,14 +1508,17 @@ int main() {
             if (houseCollider.isBuilt()) {
                 glm::vec3 n; float p;
                 if (houseCollider.collideSphere(next, playerRadius, n, p)) {
-                    next += n * (p + 0.001f);
+                    if (!isInGarage || n.y >= 0.0f) {
+                        next += n * (p + 0.001f);
+                        houseVerticalVelocity = 0.0f;
+                    }
                     next.x = safePos.x; next.z = safePos.z;
-                    houseVerticalVelocity = 0.0f;
                 }
             }
 
             float footY = next.y - eyeHeight;
-            bool grounded = footY <= floorY + 0.15f && (floorY - footY) < 2.0f;
+            bool grounded = houseVerticalVelocity <= 0.0f
+                            && footY <= floorY + 0.15f && (floorY - footY) < 2.0f;
             bool spaceDown = glfwGetKey(gWindow, GLFW_KEY_SPACE) == GLFW_PRESS;
             bool spaceJustPressed = spaceDown && !spaceWasPressed;
             spaceWasPressed = spaceDown;
@@ -1496,12 +1526,12 @@ int main() {
                 next.y = floorY + eyeHeight;
                 houseVerticalVelocity = 0.0f;
                 jumpCount = 0;
-                if (spaceDown) {
-                    houseVerticalVelocity = 5.0f;
+                if (isInGarage ? spaceJustPressed : spaceDown) {
+                    houseVerticalVelocity = isInGarage ? 3.0f : 5.0f;
                     jumpCount = 1;
                 }
             } else if (isInGarage && jumpCount < 2 && spaceJustPressed) {
-                houseVerticalVelocity = 5.0f;
+                houseVerticalVelocity = isInGarage ? 3.0f : 5.0f;
                 jumpCount++;
             }
 
@@ -1528,6 +1558,7 @@ int main() {
                     if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
                         if (eKeyDown && !puertaEKeyHeld) {
                             if (puerta.esBodega) {
+                                if (hasAmbientLoop) ma_sound_stop(&ambientLoop);
                                 bodegaGame.init(WINDOW_WIDTH, WINDOW_HEIGHT);
                                 bodegaMouseCaptured = false;
                                 state = AppState::Bodega;
@@ -1690,6 +1721,7 @@ int main() {
                 bodegaMouseCaptured = false;
             } else if (bodegaGame.wantsExit()) {
                 bodegaGame.destroy();
+                if (hasAmbientLoop) ma_sound_start(&ambientLoop);
                 glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 gHouseCapturedMouse = false;
                 state = AppState::HouseWalk;
