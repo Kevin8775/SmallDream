@@ -515,7 +515,7 @@ int main() {
     MeshCollider houseCollider;
     // Door interaction system
     bool puertaEKeyHeld = false;
-    Cuarto cuartoCocina;
+    Cuarto cuartoDormitorio;
     Cuarto cuartoGaraje;
     Cuarto cuartoBano;
     std::vector<Puerta> puertas;
@@ -608,8 +608,8 @@ int main() {
     };
 
     // Door data configuration
-    cuartoCocina.rutaModelo = "assets/models/cocina/scene.gltf";  // <<< CAMBIAR: ruta del modelo 3D
-    cuartoCocina.puntoAparicion = glm::vec3(-17.067499f, -12.492846f, -32.295829f);
+    cuartoDormitorio.rutaModelo = "assets/models/bedroom/scene.gltf";
+    cuartoDormitorio.puntoAparicion = glm::vec3(0.0f, 0.0f, 0.0f);
     cuartoGaraje.rutaModelo = "assets/models/garage_parkour/garaje.gltf";
     cuartoGaraje.puntoAparicion = glm::vec3(0.0f, 1.8f, 0.0f);
     cuartoBano.rutaModelo = "assets/models/bano/scene.gltf";       // <<< CAMBIAR
@@ -617,7 +617,7 @@ int main() {
 
     glm::vec3 tamanoPuerta(4.0f, 2.5f, 4.0f);
 
-    puertas.push_back({glm::vec3(-17.284657f, -12.492844f, -36.773849f), tamanoPuerta, "Presiona E para entrar al cuarto", &cuartoCocina});
+    puertas.push_back({glm::vec3(-17.284657f, -12.492844f, -36.773849f), tamanoPuerta, "Presiona E para entrar al dormitorio", &cuartoDormitorio});
     puertas.push_back({glm::vec3(  9.757366f, -26.899001f, -20.823090f), tamanoPuerta, "Presiona E para entrar al garaje",  &cuartoGaraje});
     puertas.push_back({glm::vec3(  5.084099f, -26.899008f, -18.237707f), tamanoPuerta, "Presiona E para entrar al bano",    nullptr, false, true});
     puertas.push_back({glm::vec3(-19.860470f, -26.899998f, -18.824844f), tamanoPuerta, "Presiona E para entrar a la bodega", nullptr, true});
