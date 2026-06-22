@@ -7,6 +7,7 @@
 #include "TextRenderer.h"
 #include "Texture.h"
 #include "Model.h"
+#include <miniaudio.h>
 
 enum class BodegaResult { Playing, Won, Lost };
 
@@ -36,7 +37,7 @@ public:
 
     struct Box { glm::vec3 center, halfSize, color; };
 
-    void init(int screenW, int screenH);
+    void init(int screenW, int screenH, ma_engine* audioEngine = nullptr);
     void destroy();
 
     // Devuelve true si ESC fue presionado (el caller abre la pausa)
@@ -86,6 +87,13 @@ private:
     float        mResultTimer  = 0.f;
     bool         mWantsExit    = false;
     bool         mAnyKeyWaiting= false;  // espera release de la tecla que abrió la pantalla
+
+    // audio del enemigo
+    ma_engine*   mAudioEngine     = nullptr;
+    ma_waveform  mEnemyWaveform;
+    ma_sound     mEnemySound;
+    bool         mEnemySoundReady = false;
+    float        mLfoPhase        = 0.f;   // oscilador de vibrato
 
     std::vector<Box> mBoxes;
     GLuint mBoxVAO = 0, mBoxVBO = 0;

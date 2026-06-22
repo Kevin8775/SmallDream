@@ -1325,7 +1325,7 @@ int main() {
                     if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
                         if (eKeyDown && !puertaEKeyHeld) {
                             if (puerta.esBodega) {
-                                bodegaGame.init(WINDOW_WIDTH, WINDOW_HEIGHT);
+                                bodegaGame.init(WINDOW_WIDTH, WINDOW_HEIGHT, &engine);
                                 bodegaMouseCaptured = false;
                                 state = AppState::Bodega;
                                 break;

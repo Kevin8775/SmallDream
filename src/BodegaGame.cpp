@@ -8,7 +8,7 @@
 
 // ─── init / destroy ───────────────────────────────────────────────────────────
 
-void BodegaGame::init(int /*screenW*/, int /*screenH*/) {
+void BodegaGame::init(int /*screenW*/, int /*screenH*/, ma_engine* audioEngine) {
     mCamPos    = {-50.f, EYE_H, -50.f};
     mCamFront  = glm::normalize(glm::vec3(1.f, 0.f, 1.f));
     mYaw       = 45.f;
@@ -20,7 +20,7 @@ void BodegaGame::init(int /*screenW*/, int /*screenH*/) {
     mBoostActive= false;
     mBoostTimer = 0.f;
 
-    mEnemyPos        = {50.f, 0.f, 50.f};
+    mEnemyPos        = {-30.f, 0.f, -30.f};
     mEnemySpeed      = 8.0f;
     mEnemyYaw        = 0.f;
     mLastSeenPlayer  = {0.f, EYE_H, 0.f};
@@ -35,6 +35,25 @@ void BodegaGame::init(int /*screenW*/, int /*screenH*/) {
     mResultTimer  = 0.f;
     mWantsExit    = false;
     mAnyKeyWaiting= true;  // espera que se suelte la tecla E con la que se entró
+
+    mLfoPhase = 0.f;
+
+    // ── sonido del enemigo (onda diente de sierra, baja frecuencia) ───────
+    mAudioEngine = audioEngine;
+    if (mAudioEngine && !mEnemySoundReady) {
+        ma_waveform_config wfCfg = ma_waveform_config_init(
+            ma_format_f32, 1, 44100,
+            ma_waveform_type_sawtooth, 0.35, 52.0);
+        if (ma_waveform_init(&wfCfg, &mEnemyWaveform) == MA_SUCCESS) {
+            if (ma_sound_init_from_data_source(mAudioEngine,
+                    &mEnemyWaveform, 0, nullptr, &mEnemySound) == MA_SUCCESS) {
+                ma_sound_set_looping(&mEnemySound, MA_TRUE);
+                ma_sound_set_volume(&mEnemySound, 0.f);
+                ma_sound_start(&mEnemySound);
+                mEnemySoundReady = true;
+            }
+        }
+    }
 
     buildMap();
     if (!mBoxVAO) buildBoxVAO();
@@ -54,6 +73,12 @@ void BodegaGame::init(int /*screenW*/, int /*screenH*/) {
 }
 
 void BodegaGame::destroy() {
+    if (mEnemySoundReady) {
+        ma_sound_stop(&mEnemySound);
+        ma_sound_uninit(&mEnemySound);
+        ma_waveform_uninit(&mEnemyWaveform);
+        mEnemySoundReady = false;
+    }
     if (mBoxVAO) { glDeleteVertexArrays(1, &mBoxVAO); mBoxVAO = 0; }
     if (mBoxVBO) { glDeleteBuffers(1, &mBoxVBO);      mBoxVBO = 0; }
     mEnemyModel.destroy();
@@ -71,59 +96,38 @@ void BodegaGame::buildMap() {
     const glm::vec3 WARN  = {0.82f, 0.58f, 0.08f};
     const glm::vec3 DARK  = {0.30f, 0.22f, 0.14f};
 
-    // add(cx, cz, half-width X, half-depth Z, half-height Y, color)
-    // centro de la caja queda a (cx, halfH, cz) — apoyada en el piso
     auto add = [&](float cx, float cz, float hw, float hd, float hh, glm::vec3 col) {
         mBoxes.push_back({{ cx, hh, cz }, { hw, hh, hd }, col});
     };
 
-    // ── cluster jugador (spawn -50,-50) ───────────────────────────────────
-    add(-38.f, -38.f,  5.f,  7.f,  9.f, WOOD);
-    add(-28.f, -40.f,  4.f,  4.f,  8.f, WOOD);
-    add(-42.f, -28.f,  6.f,  4.f, 12.f, METAL);
-    add(-30.f, -28.f,  4.f,  4.f,  8.f, DARK);
-
-    // ── pasillo izquierdo ─────────────────────────────────────────────────
-    add(-48.f, -10.f,  4.f, 10.f, 11.f, WOOD);
-    add(-48.f,  12.f,  4.f,  5.f,  9.f, WARN);
-    add(-44.f,   2.f,  3.f,  3.f,  7.f, METAL);
-
-    // ── bloque centro-izquierda ───────────────────────────────────────────
-    add(-22.f, -18.f,  7.f,  5.f, 14.f, WOOD);
-    add(-20.f,  -8.f,  4.f,  4.f,  8.f, METAL);
-    add(-28.f,  -5.f,  5.f,  3.f, 10.f, DARK);
-
-    // ── masa central (enorme, crea pasillo en L) ─────────────────────────
+    // ── bloque central único ──────────────────────────────────────────────
     add(  0.f,   0.f,  8.f,  8.f, 18.f, WARN);
-    add( 12.f,   8.f,  5.f,  5.f, 13.f, WOOD);
-    add( -8.f,  12.f,  4.f,  6.f, 10.f, METAL);
 
-    // ── filas de cajas horizontales ───────────────────────────────────────
-    add(-15.f,  28.f, 12.f,  4.f, 11.f, WOOD);    // fila larga norte
-    add( 18.f, -28.f, 12.f,  4.f, 11.f, METAL);   // fila larga sur
+    // ── cuadrante noroeste ────────────────────────────────────────────────
+    add(-38.f,  12.f,  5.f,  5.f, 11.f, WOOD);
+    add(-20.f,  35.f,  6.f,  4.f, 10.f, METAL);
 
-    // ── bloque centro-derecha ─────────────────────────────────────────────
-    add( 22.f,  18.f,  5.f,  9.f, 12.f, WOOD);
-    add( 28.f,   6.f,  4.f,  4.f,  8.f, DARK);
-    add( 20.f,  -5.f,  6.f,  4.f, 15.f, WARN);
+    // ── cuadrante noreste ─────────────────────────────────────────────────
+    add( 22.f,  30.f,  5.f,  5.f, 12.f, WOOD);
+    add( 42.f,  20.f,  4.f,  8.f,  9.f, WARN);
 
-    // ── pasillo derecho ───────────────────────────────────────────────────
-    add( 48.f,  10.f,  4.f, 10.f, 11.f, WOOD);
-    add( 48.f, -12.f,  4.f,  5.f,  9.f, WARN);
-    add( 44.f,   0.f,  3.f,  3.f,  7.f, METAL);
+    // ── cuadrante sureste ─────────────────────────────────────────────────
+    add( 38.f, -12.f,  5.f,  5.f, 11.f, METAL);
+    add( 20.f, -38.f,  6.f,  4.f, 10.f, DARK);
 
-    // ── cluster enemigo (spawn +50,+50) ───────────────────────────────────
-    add( 40.f,  36.f,  5.f,  7.f,  9.f, WOOD);
-    add( 28.f,  40.f,  4.f,  4.f,  8.f, METAL);
-    add( 42.f,  28.f,  6.f,  4.f, 12.f, DARK);
+    // ── cuadrante suroeste (una caja de paso, no bloquea spawn) ──────────
+    add(-20.f, -22.f,  4.f,  4.f,  9.f, WOOD);
 
-    // ── elementos sueltos para romper líneas de vista ─────────────────────
-    add(-35.f,  15.f,  4.f,  4.f,  9.f, WOOD);
-    add( 35.f, -15.f,  4.f,  4.f,  9.f, METAL);
-    add(  5.f,  42.f,  5.f,  5.f, 10.f, DARK);
-    add( -5.f, -42.f,  5.f,  5.f, 10.f, WARN);
-    add( 15.f, -10.f,  3.f,  8.f,  8.f, WOOD);
-    add(-15.f,  10.f,  3.f,  8.f,  8.f, METAL);
+    // ── bordes laterales ──────────────────────────────────────────────────
+    add(-48.f,  -8.f,  4.f,  8.f, 11.f, WOOD);
+    add( 48.f,   8.f,  4.f,  8.f, 11.f, METAL);
+
+    // ── norte y sur ───────────────────────────────────────────────────────
+    add(  8.f,  45.f,  7.f,  4.f, 10.f, DARK);
+    add( -8.f, -45.f,  7.f,  4.f, 10.f, WARN);
+
+    // ── diagonal sureste ─────────────────────────────────────────────────
+    add( 32.f, -35.f,  4.f,  4.f,  9.f, WOOD);
 }
 
 // ─── VAO del cubo unitario ────────────────────────────────────────────────────
@@ -286,7 +290,24 @@ bool BodegaGame::update(float dt, GLFWwindow* window,
 
     // IA del enemigo
     mElapsed += dt;
-    mEnemySpeed = std::min(8.0f + mElapsed * 0.05f, 15.0f);
+    mEnemySpeed = std::min(11.0f + mElapsed * 0.05f, 18.0f);
+
+    // ── sonido por proximidad ─────────────────────────────────────────────
+    if (mEnemySoundReady) {
+        glm::vec2 de(mCamPos.x - mEnemyPos.x, mCamPos.z - mEnemyPos.z);
+        float dist    = glm::length(de);
+        float t       = glm::clamp(1.f - dist / MAP_HALF, 0.f, 1.f);
+        float volume  = t * t * t;                // cae rápido con distancia
+
+        // LFO lento (0.8 Hz) para vibrato mecánico inquietante
+        mLfoPhase += dt * 0.8f * 6.2832f;
+        if (mLfoPhase > 6.2832f) mLfoPhase -= 6.2832f;
+        double baseFreq  = 52.0 + 14.0 * (double)t;    // 52–66 Hz según cercanía
+        double lfoFreq   = baseFreq + 6.0 * std::sin((double)mLfoPhase);
+
+        ma_waveform_set_frequency(&mEnemyWaveform, lfoFreq);
+        ma_sound_set_volume(&mEnemySound, volume * 0.9f);
+    }
 
     bool los = hasLOS(mEnemyPos, mCamPos);
     if (los) {
