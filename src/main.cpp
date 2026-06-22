@@ -1603,19 +1603,18 @@ int main() {
                 }
             }
         } else if (state == AppState::DreamBlack) {
-            // Black screen for 2 seconds, then play typing sound
-            if (dreamBlackTimer < 2.0f) {
+            // Black screen for 0.5s, play typing sound, transition at 1.5s total
+            if (dreamBlackTimer < 0.5f) {
                 dreamBlackTimer += dt;
             } else if (!tecladoPlayed) {
-                // Init and play the teclado sound once
                 hasTecladoSound = ma_sound_init_from_file(&engine, "assets/sounds/ui/teclado.mp3", 0, nullptr, nullptr, &tecladoSound) == MA_SUCCESS;
                 if (hasTecladoSound) {
                     ma_sound_start(&tecladoSound);
                 }
                 tecladoPlayed = true;
             } else {
-                // Wait for sound to finish playing
-                if (!hasTecladoSound || !ma_sound_is_playing(&tecladoSound)) {
+                dreamBlackTimer += dt;
+                if (dreamBlackTimer > 1.5f) {
                     visualNovel->reset();
                     state = AppState::VisualNovel;
                 }

@@ -101,27 +101,17 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     mScenes.back().bgPath = "assets/textures/oficina.png";
     addLine(TextId::VN_S0_0);
     addLine(TextId::VN_S0_1);
-    addLine(TextId::VN_S0_2);
-    addLine(TextId::VN_S0_3);
     addLine(TextId::VN_S0_4);
     addLine(TextId::VN_S0_5);
     addLine(TextId::VN_S0_6);
-    addLine(TextId::VN_S0_7);
-    addLine(TextId::VN_S0_8);
-    addLine(TextId::VN_S0_9);
-    addLine(TextId::VN_S0_10, "assets/sounds/ui/arrastrar_silla.mp3", true);
-    addLine(TextId::VN_S0_11, "assets/sounds/ui/mochila.mp3", true);
     addLine(TextId::VN_S0_12);
 
     // Scene 1: Office building (exterior)
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/empresa.png";
     addLine(TextId::VN_S1_0, "assets/sounds/ui/puerta_vidrio.mp3");
-    addLine(TextId::VN_S1_1);
     addLine(TextId::VN_S1_2);
     addLine(TextId::VN_S1_3, "assets/sounds/ui/pasos_2.mp3");
-    addLine(TextId::VN_S1_4);
-    addLine(TextId::VN_S1_5);
 
     // Scene 2: Street
     mScenes.push_back({});
@@ -129,56 +119,33 @@ VisualNovel::VisualNovel(TextRenderer* textRenderer, Shader* spriteShader,
     mScenes.back().ambientSound = "assets/sounds/ui/viento.mp3";
     addLine(TextId::VN_S2_0);
     addLine(TextId::VN_S2_1);
-    addLine(TextId::VN_S2_2);
-    addLine(TextId::VN_S2_3, "assets/sounds/ui/pasos_2.mp3");
-    addLine(TextId::VN_S2_4, "assets/sounds/ui/pasos_2.mp3");
-    addLine(TextId::VN_S2_5);
     addLine(TextId::VN_S2_6);
-    addLine(TextId::VN_S2_7);
-    addLine(TextId::VN_S2_8);
     addLine(TextId::VN_S2_9);
-    addLine(TextId::VN_S2_10);
     addLine(TextId::VN_S2_11);
 
     // Scene 3: Home
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa.png";
     addLine(TextId::VN_S3_0, "assets/sounds/ui/puerta_casa.mp3", true);
-    addLine(TextId::VN_S3_1);
     addLine(TextId::VN_S3_2, "assets/sounds/ui/llaves.mp3", true);
-    addLine(TextId::VN_S3_3);
     addLine(TextId::VN_S3_4);
-    addLine(TextId::VN_S3_5, "assets/sounds/ui/mochila.mp3", true);
-    addLine(TextId::VN_S3_6);
     addLine(TextId::VN_S3_7);
-    addLine(TextId::VN_S3_8);
-    addLine(TextId::VN_S3_9);
-    addLine(TextId::VN_S3_10);
     addLine(TextId::VN_S3_11);
 
     // Scene 4: Living room (couch)
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa_por_dentro.png";
     addLine(TextId::VN_S4_0);
-    addLine(TextId::VN_S4_1);
-    addLine(TextId::VN_S4_2);
-    addLine(TextId::VN_S4_3);
     addLine(TextId::VN_S4_4);
     addLine(TextId::VN_S4_5);
-    addLine(TextId::VN_S4_6);
-    addLine(TextId::VN_S4_7);
-    addLine(TextId::VN_S4_8);
     addLine(TextId::VN_S4_9);
 
     // Scene 5: Dark / blurry house
     mScenes.push_back({});
     mScenes.back().bgPath = "assets/textures/casa_oscura.png";
     addLine(TextId::VN_S5_0);
-    addLine(TextId::VN_S5_1);
     addLine(TextId::VN_S5_2);
-    addLine(TextId::VN_S5_3);
     addLine(TextId::VN_S5_4);
-    addLine(TextId::VN_S5_5);
 
     // Scene 6: Black
     mScenes.push_back({});
