@@ -13,4 +13,7 @@ struct Puerta {
     glm::vec3 tamano;
     std::string mensaje;
     Cuarto* destino;
+    bool esBodega = false;
+    bool esBano = false;
+    bool esSalida = false;   // puerta de escape final (requiere las 4 monedas)
 };

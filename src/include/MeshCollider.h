@@ -12,12 +12,24 @@ struct CollisionTriangle {
     glm::vec3 v0, v1, v2;
 };
 
+struct MeshCollisionInfo {
+    glm::vec3 center;
+    float radius;
+};
+
+struct MeshCluster {
+    glm::vec3 center;
+    float radius;
+    std::vector<int> meshIndices;
+};
+
 class MeshCollider {
 public:
     ~MeshCollider();
 
     void addModel(const Model& model, const glm::mat4& transform = glm::mat4(1.0f));
     void addFloorQuad(float y, float xMin, float xMax, float zMin, float zMax);
+    void addFloorCap(float y, float xMin, float xMax, float zMin, float zMax);
     void build();
 
     bool collideSphere(const glm::vec3& center, float radius,
@@ -34,9 +46,13 @@ public:
 
 private:
     std::vector<CollisionTriangle> mTriangles;
+    std::vector<MeshCollisionInfo> mMeshInfos;
+    std::vector<int> mTriToMesh;
+    std::vector<MeshCluster> mClusters;
     bool mBuilt = false;
 
-    static constexpr float CELL_SIZE = 5.0f;
+    static constexpr float CLUSTER_DISTANCE = 4.0f;
+    static constexpr float CELL_SIZE = 1.0f;
 
     struct Cell {
         std::vector<size_t> triIndices;
