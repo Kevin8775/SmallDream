@@ -93,10 +93,19 @@ bool Model::load(const std::string& path) {
             aiString texPath;
             if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) == AI_SUCCESS && texPath.length > 0) {
                 m.diffuseTexture = new Texture(joinPath(modelDir, texPath.C_Str()));
+            } else if (material->GetTexture(aiTextureType_BASE_COLOR, 0, &texPath) == AI_SUCCESS && texPath.length > 0) {
+                m.diffuseTexture = new Texture(joinPath(modelDir, texPath.C_Str()));
             }
             aiColor3D diffuseColor(1.0f, 1.0f, 1.0f);
             if (material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuseColor) == AI_SUCCESS) {
                 m.baseColor = glm::vec3(diffuseColor.r, diffuseColor.g, diffuseColor.b);
+            }
+            aiString matName;
+            if (material->Get(AI_MATKEY_NAME, matName) == AI_SUCCESS) {
+                std::string name(matName.C_Str());
+                if (name.find("material_") == 0) {
+                    m.baseColor = glm::vec3(0.0f, 0.0f, 1.0f);
+                }
             }
         }
 
@@ -110,9 +119,10 @@ bool Model::load(const std::string& path) {
 
 void Model::draw(Shader& shader) const {
     shader.use();
+    shader.setVec3("uTintColor", mTintColor.r, mTintColor.g, mTintColor.b);
     for (const auto& mesh : mMeshes) {
         shader.setVec3("uBaseColor", mesh.baseColor.r, mesh.baseColor.g, mesh.baseColor.b);
-        if (mesh.diffuseTexture) {
+        if (mesh.diffuseTexture && mesh.diffuseTexture->isValid()) {
             shader.setInt("uHasTexture", 1);
             mesh.diffuseTexture->bind(0);
         } else {

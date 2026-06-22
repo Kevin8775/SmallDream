@@ -37,11 +37,13 @@ public:
     glm::vec3 boundsMax() const { return mBoundsMax; }
     const std::string& lastError() const { return mLastError; }
     const std::vector<ModelMesh>& meshes() const { return mMeshes; }
+    void setTintColor(const glm::vec3& color) { mTintColor = color; }
 
 private:
     std::vector<ModelMesh> mMeshes;
     glm::vec3 mBoundsMin = glm::vec3(0.0f);
     glm::vec3 mBoundsMax = glm::vec3(0.0f);
+    glm::vec3 mTintColor = glm::vec3(1.0f);
     bool mLoaded = false;
     std::string mLastError;
 };

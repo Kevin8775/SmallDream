@@ -7,6 +7,7 @@ out vec4 fragColor;
 uniform vec3 uBaseColor = vec3(0.82, 0.82, 0.86);
 uniform sampler2D uTexture0;
 uniform int uHasTexture = 0;
+uniform vec3 uTintColor = vec3(1.0);
 
 uniform vec3 uAmbientColor = vec3(0.18, 0.15, 0.12);
 
@@ -45,6 +46,6 @@ void main() {
     float spec2 = pow(max(dot(n, h2), 0.0), uShininess) * uSpecIntensity * 0.4;
     lighting += (diff2 + spec2) * uFillLightColor * uFillLightIntensity;
 
-    vec3 col = base * lighting;
+    vec3 col = base * lighting * uTintColor;
     fragColor = vec4(col, 1.0);
 }

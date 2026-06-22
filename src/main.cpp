@@ -449,8 +449,11 @@ int main() {
     bool houseLoadingStarted = false;
     const float houseTargetSize = 120.0f;
     float houseVerticalVelocity = 0.0f;
+    bool isInGarage = false;
+    int jumpCount = 0;
+    bool spaceWasPressed = false;
 
-    const float eyeHeight = 2.0f;
+    float eyeHeight = 2.0f;
     const float playerRadius = 0.3f;
     MeshCollider houseCollider;
     // Door interaction system
@@ -488,6 +491,8 @@ int main() {
             houseCollider.build();
             camPos = spawn;
             houseVerticalVelocity = 0.0f;
+            isInGarage = (ruta.find("garage") != std::string::npos);
+            eyeHeight = isInGarage ? 1.2f : 2.0f;
 
             if (ruta.find("house") != std::string::npos) {
                 puertas = puertasCasaRespaldo;
@@ -537,8 +542,8 @@ int main() {
     // Door data configuration
     cuartoCocina.rutaModelo = "assets/models/cocina/scene.gltf";  // <<< CAMBIAR: ruta del modelo 3D
     cuartoCocina.puntoAparicion = glm::vec3(-17.067499f, -12.492846f, -32.295829f);
-    cuartoGaraje.rutaModelo = "assets/models/garage/scene.gltf";
-    cuartoGaraje.puntoAparicion = glm::vec3(0.0f, 5.0f, 0.0f);    // AJUSTAR desde POS del HUD
+    cuartoGaraje.rutaModelo = "assets/models/garage_parkour/garaje.gltf";
+    cuartoGaraje.puntoAparicion = glm::vec3(0.0f, 1.8f, 0.0f);
     cuartoBano.rutaModelo = "assets/models/bano/scene.gltf";       // <<< CAMBIAR
     cuartoBano.puntoAparicion = glm::vec3(0.0f, 0.0f, 0.0f);      // <<< CAMBIAR: spawn del baño
 
@@ -1308,7 +1313,7 @@ int main() {
             camFront = glm::normalize(front);
             glm::vec3 right = glm::normalize(glm::cross(camFront, camUp));
             bool sprinting = glfwGetKey(gWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
-            float speed = 7.5f * dt * (sprinting ? 2.0f : 1.0f);
+            float speed = 7.5f * dt * (sprinting ? 2.0f : 1.0f) * (isInGarage ? 0.4f : 1.0f);
             glm::vec3 move(0.0f);
             if (glfwGetKey(gWindow, GLFW_KEY_W) == GLFW_PRESS) move += camFront * speed;
             if (glfwGetKey(gWindow, GLFW_KEY_S) == GLFW_PRESS) move -= camFront * speed;
@@ -1352,12 +1357,20 @@ int main() {
 
             float footY = next.y - eyeHeight;
             bool grounded = footY <= floorY + 0.15f && (floorY - footY) < 2.0f;
+            bool spaceDown = glfwGetKey(gWindow, GLFW_KEY_SPACE) == GLFW_PRESS;
+            bool spaceJustPressed = spaceDown && !spaceWasPressed;
+            spaceWasPressed = spaceDown;
             if (grounded) {
                 next.y = floorY + eyeHeight;
                 houseVerticalVelocity = 0.0f;
-                if (glfwGetKey(gWindow, GLFW_KEY_SPACE) == GLFW_PRESS) {
+                jumpCount = 0;
+                if (spaceDown) {
                     houseVerticalVelocity = 5.0f;
+                    jumpCount = 1;
                 }
+            } else if (isInGarage && jumpCount < 2 && spaceJustPressed) {
+                houseVerticalVelocity = 5.0f;
+                jumpCount++;
             }
 
             if (!hasStepsSound) {
