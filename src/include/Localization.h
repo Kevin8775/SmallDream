@@ -102,7 +102,8 @@ enum class TextId {
     VN_S5_6,
     VN_S6_0,
     VN_S6_1,
-    VN_S6_2
+    VN_S6_2,
+    HouseIntroDialog
 };
 
 namespace Localization {

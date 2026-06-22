@@ -157,6 +157,9 @@ std::string t(TextId id) {
         case TextId::VN_S6_0: return es ? "..." : "...";
         case TextId::VN_S6_1: return es ? "..." : "...";
         case TextId::VN_S6_2: return es ? "...?" : "...?";
+        case TextId::HouseIntroDialog: return es
+            ? "\u00bfEh...? \u00bfQu\u00e9 pas\u00f3?... Todo est\u00e1 tan oscuro... Y todo es enorme... No, espera... No es que sea enorme... Soy yo... \u00a1Me he encogido! Pero... \u00bfc\u00f3mo? \u00bfQu\u00e9 habr\u00e1 pasado?"
+            : "Huh...? What happened?... Everything is so dark... And everything is huge... No, wait... It's not that it's huge... It's me... I've shrunk! But... how? What happened?";
     }
     return "";
 }

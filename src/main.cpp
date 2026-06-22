@@ -76,6 +76,7 @@ static bool bodegaMouseCaptured = false;
 static bool banoMouseCaptured = false;
 static AppState gPauseReturnState = AppState::Menu;
 static bool gShowCollisionDebug = false;
+static bool gPendingHouseDialog = false;
 
 static bool pointInRect(double x, double y, float rx, float ry, float rw, float rh) {
     return x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
@@ -132,6 +133,7 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
             float viewY = WINDOW_HEIGHT * 0.58f;
 
             if (pointInRect(mx, my, btnX, skipY, btnW, btnH)) {
+                gPendingHouseDialog = true;
                 *gStatePtr = AppState::HouseLoading;
                 gHouseCapturedMouse = false;
                 return;
@@ -278,6 +280,51 @@ static Texture* createGlowTexture() {
 static Texture* createWhiteTexture() {
     unsigned char pixel[4] = {255, 255, 255, 255};
     return new Texture(1, 1, pixel, GL_RGBA, GL_RGBA);
+}
+
+static size_t utf8Length(const std::string& text) {
+    size_t count = 0;
+    const unsigned char* ptr = reinterpret_cast<const unsigned char*>(text.data());
+    const unsigned char* end = ptr + text.size();
+    while (ptr < end) {
+        unsigned char c = *ptr++;
+        if (c < 0x80) {
+            count++;
+        } else if ((c & 0xE0) == 0xC0 && ptr < end) {
+            ptr += 1;
+            count++;
+        } else if ((c & 0xF0) == 0xE0 && ptr + 1 < end) {
+            ptr += 2;
+            count++;
+        } else if ((c & 0xF8) == 0xF0 && ptr + 2 < end) {
+            ptr += 3;
+            count++;
+        } else {
+            break;
+        }
+    }
+    return count;
+}
+
+static std::string utf8Prefix(const std::string& text, size_t chars) {
+    size_t pos = 0;
+    size_t count = 0;
+    const unsigned char* ptr = reinterpret_cast<const unsigned char*>(text.data());
+    const unsigned char* end = ptr + text.size();
+    while (ptr < end && count < chars) {
+        unsigned char c = *ptr;
+        size_t step = 1;
+        if (c < 0x80) step = 1;
+        else if ((c & 0xE0) == 0xC0) step = 2;
+        else if ((c & 0xF0) == 0xE0) step = 3;
+        else if ((c & 0xF8) == 0xF0) step = 4;
+        else break;
+        if (ptr + step > end) break;
+        ptr += step;
+        pos += step;
+        count++;
+    }
+    return text.substr(0, pos);
 }
 
 static void renderSprite(GLuint vao, Shader& shader, Texture& tex, const glm::mat4& proj,
@@ -477,6 +524,17 @@ int main() {
     glm::vec3 pendingRoomSpawn;
     bool roomLoadingStarted = false;
     float roomLoadingTimer = 0.0f;
+
+    bool houseDialogActive = false;
+    bool houseDialogDismissed = false;
+    float houseDialogSlideTimer = 0.0f;
+    float houseDialogWordTimer = 0.0f;
+    int houseDialogWordIdx = 0;
+    bool houseDialogLineFinished = false;
+    float houseDialogExitTimer = 0.0f;
+    Texture* houseDialogBox = nullptr;
+    std::vector<std::string> houseDialogWords;
+
     auto cargarEscenario = [&](const std::string& ruta, const glm::vec3& spawn) {
         houseCollider.destroy();
         houseModel.destroy();
@@ -1316,6 +1374,24 @@ int main() {
                 gHouseCapturedMouse = true;
                 firstMouse = true;
             }
+            if (gPendingHouseDialog) {
+                gPendingHouseDialog = false;
+                houseDialogActive = true;
+                houseDialogDismissed = false;
+                houseDialogSlideTimer = 0.0f;
+                houseDialogWordTimer = 0.0f;
+                houseDialogWordIdx = 0;
+                houseDialogLineFinished = false;
+                houseDialogWords.clear();
+                if (Localization::current() == Language::Spanish) {
+                    houseDialogWords = {"\u00bfEh...?", "\u00bfQu\u00e9 pas\u00f3?...", "Todo est\u00e1 tan oscuro...", "Y todo es enorme...", "No, espera...", "No es que sea enorme...", "Soy yo...", "\u00a1Me he encogido!", "Pero... \u00bfc\u00f3mo?", "\u00bfQu\u00e9 habr\u00e1 pasado?"};
+                } else {
+                    houseDialogWords = {"Huh...?", "What happened?...", "Everything is so dark...", "And everything is huge...", "No, wait...", "It's not that it's huge...", "It's me...", "I've shrunk!", "But... how?", "What happened?"};
+                }
+                if (!houseDialogBox) {
+                    houseDialogBox = new Texture("assets/textures/caja_dialogo.png");
+                }
+            }
             double mx2, my2;
             glfwGetCursorPos(gWindow, &mx2, &my2);
             if (firstMouse) { lastMouseX = mx2; lastMouseY = my2; firstMouse = false; }
@@ -1505,6 +1581,65 @@ int main() {
                     break;
                 }
             }
+            if (houseDialogActive && !houseDialogDismissed) {
+                float boxW = (float)houseDialogBox->getWidth();
+                float boxH = (float)houseDialogBox->getHeight();
+                float boxX = (WINDOW_WIDTH - boxW) / 2.0f;
+
+                houseDialogSlideTimer += dt;
+                float slideProgress = std::min(houseDialogSlideTimer / 0.5f, 1.0f);
+                float slideOffset = (1.0f - slideProgress) * boxH;
+                float boxY = WINDOW_HEIGHT - boxH - 10.0f + slideOffset;
+                float alpha = std::min(slideProgress * 2.0f, 1.0f);
+
+                const float WORD_INTERVAL = 2.0f;
+                const float CHAR_INTERVAL = 0.05f;
+
+                if (!houseDialogLineFinished) {
+                    houseDialogWordTimer += dt;
+                    if (houseDialogWordTimer >= WORD_INTERVAL) {
+                        houseDialogWordTimer = 0.0f;
+                        houseDialogWordIdx++;
+                        if (houseDialogWordIdx >= (int)houseDialogWords.size()) {
+                            houseDialogLineFinished = true;
+                            houseDialogWordIdx = (int)houseDialogWords.size() - 1;
+                            houseDialogExitTimer = 0.0f;
+                        }
+                    }
+                }
+
+                if (houseDialogLineFinished) {
+                    houseDialogExitTimer += dt;
+                    float exitDelay = 1.5f;
+                    float exitDuration = 0.5f;
+                    if (houseDialogExitTimer > exitDelay) {
+                        float exitElapsed = houseDialogExitTimer - exitDelay;
+                        float exitProgress = std::min(exitElapsed / exitDuration, 1.0f);
+                        boxY = WINDOW_HEIGHT - boxH - 10.0f + exitProgress * boxH;
+                        alpha = 1.0f - exitProgress;
+                        if (exitProgress >= 1.0f) {
+                            houseDialogDismissed = true;
+                            houseDialogActive = false;
+                        }
+                    }
+                }
+
+                renderSprite(quadVAO, spriteShader, *houseDialogBox, proj,
+                             boxX, boxY, boxW, boxH, glm::vec4(1.0f, 1.0f, 1.0f, alpha));
+
+                if (houseDialogWordIdx < (int)houseDialogWords.size()) {
+                    float textX = boxX + 40.0f;
+                    float textY = boxY + 20.0f;
+                    std::string word = houseDialogWords[houseDialogWordIdx];
+                    int wordLen = (int)utf8Length(word);
+                    float revealTime = wordLen * CHAR_INTERVAL;
+                    int charIdx = (wordLen > 0 && houseDialogWordTimer < revealTime)
+                        ? (int)(houseDialogWordTimer / CHAR_INTERVAL)
+                        : wordLen;
+                    std::string visible = utf8Prefix(word, (size_t)charIdx);
+                    textRenderer.renderText(visible, textX, textY, 0.55f, glm::vec3(1.0f, 1.0f, 1.0f));
+                }
+            }
         } else if (state == AppState::Bodega) {
             if (!bodegaMouseCaptured) {
                 glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -1623,6 +1758,7 @@ int main() {
             visualNovel->update(dt, mouseJustPressed);
             visualNovel->render();
             if (visualNovel->isFinished()) {
+                gPendingHouseDialog = true;
                 state = AppState::HouseLoading;
                 gHouseCapturedMouse = false;
                 houseLoadingStarted = false;
@@ -1705,6 +1841,7 @@ int main() {
     delete underlineTex;
     delete loadingBarTex;
     delete visualNovel;
+    delete houseDialogBox;
     delete keyW; delete keyA; delete keyS; delete keyD;
     delete keyMouse; delete keySpace;
     if (hasLoadingDone) ma_sound_uninit(&loadingDone);
