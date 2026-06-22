@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/textures/skybox-menu/px.png" alt="SmallDream Banner" width="600"/>
+  <img src="assets/textures/readmeCover.png" alt="SmallDream Banner" width="600"/>
 </p>
 
 <h1 align="center">SmallDream</h1>
