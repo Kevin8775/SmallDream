@@ -453,15 +453,27 @@ void BodegaGame::renderScene(Shader& modelShader,
                               const glm::mat4& view, const glm::mat4& proj3d) {
     modelShader.use();
     modelShader.setVec3("uCamPos",              mCamPos.x, mCamPos.y, mCamPos.z);
-    modelShader.setVec3("uAmbientColor",        0.08f, 0.08f, 0.09f);
+    // Ambiente muy bajo: la bodega está a oscuras. No es 0 para que las zonas
+    // fuera del haz se vean apenas (siluetas), no negro total.
+    modelShader.setVec3("uAmbientColor",        0.045f, 0.045f, 0.055f);
     modelShader.setVec3("uMainLightDir",        0.f,   1.f,   0.f);
-    modelShader.setVec3("uMainLightColor",      1.0f,  0.92f, 0.78f);
-    modelShader.setFloat("uMainLightIntensity", 0.80f);
+    modelShader.setVec3("uMainLightColor",      0.6f,  0.62f, 0.72f);
+    modelShader.setFloat("uMainLightIntensity", 0.10f);   // tenue luz global
     modelShader.setVec3("uFillLightDir",        0.5f,  0.3f,  0.5f);
-    modelShader.setVec3("uFillLightColor",      0.35f, 0.42f, 0.58f);
-    modelShader.setFloat("uFillLightIntensity", 0.38f);
+    modelShader.setVec3("uFillLightColor",      0.30f, 0.36f, 0.52f);
+    modelShader.setFloat("uFillLightIntensity", 0.07f);
     modelShader.setFloat("uShininess",          16.f);
     modelShader.setFloat("uSpecIntensity",      0.12f);
+    modelShader.setInt("uFogEnabled",           0);
+
+    // Linterna cónica: foco en la cámara, apuntando hacia donde mira el jugador.
+    modelShader.setInt("uFlashlightEnabled", 1);
+    modelShader.setVec3("uFlashPos",  mCamPos.x, mCamPos.y, mCamPos.z);
+    modelShader.setVec3("uFlashDir",  mCamFront.x, mCamFront.y, mCamFront.z);
+    modelShader.setFloat("uFlashInnerCos", std::cos(glm::radians(13.0f)));
+    modelShader.setFloat("uFlashOuterCos", std::cos(glm::radians(27.0f)));
+    modelShader.setVec3("uFlashColor", 1.7f, 1.6f, 1.35f);
+    modelShader.setFloat("uFlashRange", 90.0f);
 
     // Piso
     renderGeom(modelShader, {0.f, -0.1f, 0.f}, {MAP_HALF, 0.1f, MAP_HALF},
@@ -508,6 +520,9 @@ void BodegaGame::renderScene(Shader& modelShader,
         renderGeom(modelShader, eyeAt( 1.f), {0.22f,0.28f,0.06f}, {1.f,1.f,1.f}, view, proj3d);
         renderGeom(modelShader, eyeAt(-1.f), {0.22f,0.28f,0.06f}, {1.f,1.f,1.f}, view, proj3d);
     }
+
+    // Desactivar la linterna para no afectar a otras escenas que comparten el shader.
+    modelShader.setInt("uFlashlightEnabled", 0);
 }
 
 // ─── render principal ─────────────────────────────────────────────────────────

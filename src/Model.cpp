@@ -145,10 +145,32 @@ bool Model::load(const std::string& path) {
         if (scene->mMaterials && mesh->mMaterialIndex < scene->mNumMaterials) {
             aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
             aiString texPath;
+            auto loadTexFromPath = [&](const char* p) -> Texture* {
+                // Assimp usa "*N" para texturas embebidas
+                if (p[0] == '*') {
+                    const aiTexture* embedded = scene->GetEmbeddedTexture(p);
+                    if (embedded) {
+                        if (embedded->mHeight == 0) {
+                            // Formato comprimido (PNG/JPG) almacenado como buffer
+                            return new Texture(
+                                reinterpret_cast<const unsigned char*>(embedded->pcData),
+                                (int)embedded->mWidth);
+                        } else {
+                            // Datos RGBA raw
+                            return new Texture(
+                                (int)embedded->mWidth, (int)embedded->mHeight,
+                                reinterpret_cast<const unsigned char*>(embedded->pcData),
+                                GL_RGBA8, GL_RGBA);
+                        }
+                    }
+                    return nullptr;
+                }
+                return new Texture(joinPath(modelDir, p));
+            };
             if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) == AI_SUCCESS && texPath.length > 0) {
-                m.diffuseTexture = new Texture(joinPath(modelDir, texPath.C_Str()));
+                m.diffuseTexture = loadTexFromPath(texPath.C_Str());
             } else if (material->GetTexture(aiTextureType_BASE_COLOR, 0, &texPath) == AI_SUCCESS && texPath.length > 0) {
-                m.diffuseTexture = new Texture(joinPath(modelDir, texPath.C_Str()));
+                m.diffuseTexture = loadTexFromPath(texPath.C_Str());
             }
             aiColor3D diffuseColor(1.0f, 1.0f, 1.0f);
             if (material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuseColor) == AI_SUCCESS) {

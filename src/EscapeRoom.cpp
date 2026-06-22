@@ -7,8 +7,8 @@ static void renderSprite(GLuint vao, Shader& shader, Texture& tex, const glm::ma
                          float x, float y, float w, float h, const glm::vec4& color) {
     shader.use();
     glm::mat4 model(1.0f);
-    model = glm::translate(model, glm::vec3(x + w * 0.5f, y + h * 0.5f, 0.0f));
-    model = glm::scale(model, glm::vec3(w * 0.5f, h * 0.5f, 1.0f));
+    model = glm::translate(model, glm::vec3(x, y, 0.0f));
+    model = glm::scale(model, glm::vec3(w, h, 1.0f));
     shader.setMat4("uModel", glm::value_ptr(model));
     shader.setMat4("uProjection", glm::value_ptr(proj));
     shader.setVec4("uColor", color.x, color.y, color.z, color.w);
@@ -40,6 +40,9 @@ void EscapeRoom::init() {
     mPanel.seleccion = 0;
     mPanel.activo = false;
     mPrimeraActualizacion = true;
+    mInstrEsperandoTecla = true;
+    mInstrTeclaRetenida  = true;
+    mInstrConteo         = 3.0f;
     mTiempoAnim = 0.0f;
     mInventarioAbierto = false;
     configurarPistas();
@@ -219,9 +222,21 @@ void EscapeRoom::update(float dt, const glm::vec3& playerPos,
     switch (mFase) {
 
     case Fase::Instrucciones: {
-        if (eJustPressed || escJustPressed || mTiempoAnim >= 5.0f) {
-            mFase = Fase::Explorando;
-            mTiempoAnim = 0.0f;
+        bool anyKey = eKeyDown || qKey || leftKey || rightKey || upKey || downKey;
+        // Esperar a que el jugador suelte las teclas con las que entró
+        if (mInstrTeclaRetenida) {
+            if (!anyKey) mInstrTeclaRetenida = false;
+            break;
+        }
+        if (mInstrEsperandoTecla) {
+            if (anyKey) mInstrEsperandoTecla = false;
+        } else {
+            // Cuenta atrás
+            mInstrConteo -= dt;
+            if (mInstrConteo <= -0.8f) {
+                mFase = Fase::Explorando;
+                mTiempoAnim = 0.0f;
+            }
         }
         break;
     }
@@ -323,58 +338,99 @@ void EscapeRoom::render(Shader& modelShader, const glm::mat4& view, const glm::m
     // ── Instrucciones ──
     if (mFase == Fase::Instrucciones) {
         float alpha = std::min(mTiempoAnim / 0.5f, 1.0f);
-        float boxW = 600.0f;
-        float boxH = 340.0f;
+
+        // Si estamos en la cuenta atrás, mostrar solo el número centrado
+        if (!mInstrEsperandoTecla) {
+            renderSprite(quadVAO, spriteShader, whiteTex, orthoProj,
+                         0.0f, 0.0f, (float)W, (float)H,
+                         glm::vec4(0.0f, 0.0f, 0.0f, 0.45f));
+            std::string num;
+            glm::vec3 col;
+            if      (mInstrConteo > 2.0f) { num = "3"; col = {1.0f, 0.35f, 0.20f}; }
+            else if (mInstrConteo > 1.0f) { num = "2"; col = {1.0f, 0.80f, 0.10f}; }
+            else if (mInstrConteo > 0.0f) { num = "1"; col = {0.25f, 1.0f, 0.35f}; }
+            else                           { num = "GO!"; col = {0.25f, 0.85f, 1.0f}; }
+            float frac = mInstrConteo - std::floor(mInstrConteo);
+            float scale = 2.0f + (1.0f - frac) * 0.8f;
+            glm::vec2 nsz = tr.getTextSize(num, scale);
+            tr.renderText(num, (W - nsz.x) * 0.5f, (H - nsz.y) * 0.5f, scale, col);
+            return;
+        }
+
+        float boxW = 740.0f;
+        float boxH = 480.0f;
         float boxX = (W - boxW) / 2.0f;
         float boxY = (H - boxH) / 2.0f;
 
         renderSprite(quadVAO, spriteShader, whiteTex, orthoProj,
                      0.0f, 0.0f, (float)W, (float)H,
-                     glm::vec4(0.0f, 0.0f, 0.0f, 0.7f * alpha));
+                     glm::vec4(0.0f, 0.0f, 0.0f, 0.72f * alpha));
         renderSprite(quadVAO, spriteShader, whiteTex, orthoProj,
                      boxX, boxY, boxW, boxH,
-                     glm::vec4(0.12f, 0.10f, 0.08f, 0.95f * alpha));
+                     glm::vec4(0.12f, 0.10f, 0.08f, 0.96f * alpha));
+        // Borde superior dorado
         renderSprite(quadVAO, spriteShader, whiteTex, orthoProj,
-                     boxX, boxY, boxW, 3.0f,
-                     glm::vec4(0.85f, 0.72f, 0.45f, 0.9f * alpha));
+                     boxX, boxY, boxW, 4.0f,
+                     glm::vec4(0.85f, 0.72f, 0.45f, 0.95f * alpha));
+        // Borde izquierdo
+        renderSprite(quadVAO, spriteShader, whiteTex, orthoProj,
+                     boxX, boxY, 4.0f, boxH,
+                     glm::vec4(0.85f, 0.72f, 0.45f, 0.60f * alpha));
 
+        // Título
         std::string title = "ESCAPE ROOM";
-        glm::vec2 tSz = tr.getTextSize(title, 0.65f);
+        glm::vec2 tSz = tr.getTextSize(title, 0.80f);
         tr.renderText(title,
-                      boxX + (boxW - tSz.x) / 2.0f, boxY + 25.0f,
-                      0.65f, glm::vec3(0.95f, 0.85f, 0.55f) * alpha);
+                      boxX + (boxW - tSz.x) / 2.0f, boxY + 22.0f,
+                      0.80f, glm::vec3(0.95f, 0.85f, 0.55f) * alpha);
 
-        std::vector<std::string> lines = {
-            "Has despertado en una habitacion desconocida.",
-            "La unica salida esta cerrada con un candado",
-            "de 4 digitos.",
-            "",
-            "Explora la habitacion para encontrar los",
-            "4 digitos del codigo ocultos en los objetos.",
-            "",
-            "Cuando tengas todos, ve al panel numerico",
-            "cerca de la puerta e ingresa el codigo.",
-            "",
-            "[Q] Inventario    [E] Interactuar    [ESC] Salir"
+        // Línea divisoria bajo el título
+        renderSprite(quadVAO, spriteShader, whiteTex, orthoProj,
+                     boxX + 20.0f, boxY + 82.0f, boxW - 40.0f, 1.5f,
+                     glm::vec4(0.45f, 0.40f, 0.32f, 0.70f * alpha));
+
+        struct Line { std::string text; bool destacado; };
+        std::vector<Line> lines = {
+            {"Has despertado en una habitacion desconocida.", false},
+            {"La unica salida esta cerrada con un candado de 4 digitos.", false},
+            {"", false},
+            {"OBJETIVO", true},
+            {"Explora la habitacion y encuentra los 4 digitos del codigo", false},
+            {"ocultos en los objetos del cuarto.", false},
+            {"Cuando los tengas todos, ve al panel numerico junto", false},
+            {"a la puerta e ingresa el codigo.", false},
+            {"", false},
+            {"CONTROLES", true},
+            {"W A S D    Moverse", false},
+            {"Mouse      Girar camara", false},
+            {"E          Interactuar con objetos / confirmar codigo", false},
+            {"Q          Abrir / cerrar inventario", false},
+            {"ESC        Salir de la habitacion", false},
         };
 
-        float yOff = boxY + 75.0f;
-        for (const auto& line : lines) {
-            glm::vec2 lSz = tr.getTextSize(line, 0.35f);
-            tr.renderText(line,
-                          boxX + (boxW - lSz.x) / 2.0f, yOff,
-                          0.35f, glm::vec3(0.85f, 0.85f, 0.85f) * alpha);
-            yOff += 24.0f;
+        float yOff = boxY + 96.0f;
+        for (const auto& ln : lines) {
+            if (ln.text.empty()) { yOff += 10.0f; continue; }
+            float sc = ln.destacado ? 0.46f : 0.40f;
+            glm::vec3 col = ln.destacado
+                ? glm::vec3(0.95f, 0.80f, 0.40f) * alpha
+                : glm::vec3(0.85f, 0.85f, 0.85f) * alpha;
+            glm::vec2 lSz = tr.getTextSize(ln.text, sc);
+            float lx = ln.destacado
+                ? boxX + (boxW - lSz.x) / 2.0f
+                : boxX + 30.0f;
+            tr.renderText(ln.text, lx, yOff, sc, col);
+            yOff += ln.destacado ? 30.0f : 24.0f;
         }
 
-        float fadeIn = std::min((mTiempoAnim - 4.0f) / 1.0f, 1.0f);
-        if (fadeIn > 0.0f) {
-            std::string hint = "Presiona E para empezar";
-            float pulse = 1.0f + std::sin(mTiempoAnim * 4.0f) * 0.05f;
-            glm::vec2 hSz = tr.getTextSize(hint, 0.4f * pulse);
+        // Prompt parpadeante en la parte inferior
+        if (!mInstrTeclaRetenida) {
+            std::string hint = "Presiona cualquier tecla para comenzar";
+            float pulse = 0.62f + 0.38f * std::sin(mTiempoAnim * 3.0f);
+            glm::vec2 hSz = tr.getTextSize(hint, 0.46f);
             tr.renderText(hint,
-                          boxX + (boxW - hSz.x) / 2.0f, boxY + boxH - 35.0f,
-                          0.4f * pulse, glm::vec3(1.0f, 1.0f, 1.0f));
+                          boxX + (boxW - hSz.x) / 2.0f, boxY + boxH - 42.0f,
+                          0.46f, glm::vec3(1.0f) * pulse);
         }
         return;
     }

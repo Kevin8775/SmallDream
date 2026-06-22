@@ -27,6 +27,7 @@
 #include "BodegaGame.h"
 #include "BanoGame.h"
 #include "EscapeRoom.h"
+#include "GameProgress.h"
 
 #define NOMINMAX
 #define MINIAUDIO_IMPLEMENTATION
@@ -55,7 +56,8 @@ enum class AppState {
     Bodega,
     Bano,
     DormitorioEscape,
-    HouseWalk
+    HouseWalk,
+    CoinReveal
 };
 
 struct CloudTile {
@@ -101,9 +103,11 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
         if (gMenu && gStatePtr && *gStatePtr == AppState::Menu) {
             int hovered = gMenu->getHoveredIndex();
             if (hovered == 0) {
+                // Nuevo sueño: empieza una partida limpia (resetea las monedas).
+                GameProgress::reset();
                 *gStatePtr = AppState::StoryChoice;
                 gCreditsPaused = false;
-                gCreditsPauseStarted = 0.0; 
+                gCreditsPauseStarted = 0.0;
                 gCreditsPauseAccum = 0.0;
             } else if (hovered == 1) {
                 *gStatePtr = AppState::HouseLoading;
@@ -375,6 +379,10 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
             *gStatePtr = AppState::Menu;
             return;
         }
+        if (gStatePtr && *gStatePtr == AppState::CoinReveal) {
+            // Animación breve: ignorar ESC para no cerrar el juego por accidente.
+            return;
+        }
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
     if (key == GLFW_KEY_B && action == GLFW_PRESS && gStatePtr && *gStatePtr == AppState::HouseWalk) {
@@ -415,6 +423,7 @@ int main() {
     }
 
     Localization::load("language.cfg");
+    GameProgress::load("progress.cfg");
 
     glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
     glEnable(GL_BLEND);
@@ -494,6 +503,23 @@ int main() {
     Shader modelShader("assets/shaders/model.vert", "assets/shaders/model.frag");
     Model houseModel;
     bool houseLoaded = false;
+    // Moneda del garaje (parkour)
+    Model coinModel;
+    bool coinLoaded = false;
+    float coinScale = 1.0f;
+    const glm::vec3 coinPos(6.502605f, 4.063640f, 1.503271f);
+    const float coinTargetHeight = 0.55f;   // del tamaño del usuario en el garaje
+
+    // ── Animación de revelación de moneda (CoinReveal) ───────────────────────
+    // Al lograr el objetivo de un cuarto se oscurece la pantalla y se muestra la
+    // moneda girando con una luz por encima, antes de regresar a la casa.
+    float coinRevealTimer = 0.0f;
+    const float coinRevealDuration = 4.5f;
+    CoinSource coinRevealSource = CoinSource::Bano;
+    AppState coinRevealReturn = AppState::HouseWalk;
+    glm::vec3 coinRevealCenter(0.0f);
+    float coinRevealFitScale = 1.0f;
+    bool coinRevealMeasured = false;
     glm::vec3 housePos(0.0f);
     glm::vec3 camPos(0.0f, 1.8f, 6.0f);
     glm::vec3 camFront(0.0f, 0.0f, -1.0f);
@@ -563,6 +589,16 @@ int main() {
             houseCollider.addFloorQuad(floorY, minW.x - margin, maxW.x + margin, minW.z - margin, maxW.z + margin);
 
             if (ruta.find("garage") != std::string::npos) {
+                // Cargar la moneda del parkour (pequeña, del tamaño del usuario)
+                if (!coinLoaded) {
+                    coinLoaded = coinModel.load("assets/models/coin/model.gltf");
+                    if (coinLoaded) {
+                        glm::vec3 cmn = coinModel.boundsMin();
+                        glm::vec3 cmx = coinModel.boundsMax();
+                        float coinH = cmx.y - cmn.y;
+                        coinScale = (coinH > 0.0001f) ? coinTargetHeight / coinH : 1.0f;
+                    }
+                }
                 const float ballFloorY = 1.35f;
                 const float halfW      = 0.35f;
                 const float zMin       = 8.3f;
@@ -638,7 +674,7 @@ int main() {
     puertas.push_back({glm::vec3(  9.757366f, -26.899001f, -20.823090f), tamanoPuerta, "Presiona E para entrar al garaje",  &cuartoGaraje});
     puertas.push_back({glm::vec3(  5.084099f, -26.899008f, -18.237707f), tamanoPuerta, "Presiona E para entrar al bano",    nullptr, false, true});
     puertas.push_back({glm::vec3(-19.860470f, -26.899998f, -18.824844f), tamanoPuerta, "Presiona E para entrar a la bodega", nullptr, true});
-    puertas.push_back({glm::vec3(-30.161835f, -12.492846f, -34.673336f), tamanoPuerta, "Completa las 3 habitaciones para desbloquear esta puerta", nullptr});
+    puertas.push_back({glm::vec3(-30.161835f, -12.492846f, -34.673336f), tamanoPuerta, "Recolecta las 4 monedas para escapar", nullptr, false, false, true});
 
     // Cloud transition animation
     float cloudAnimTimer = 0.0f;
@@ -774,6 +810,43 @@ int main() {
         gCreditsPauseAccum = 0.0;
         state = AppState::Menu;
         gPauseReturnState = AppState::Menu;
+    };
+
+    // Lanza la animación de revelación de moneda. Marca la moneda como
+    // recolectada (autoguarda) y prepara el estado CoinReveal.
+    auto startCoinReveal = [&](CoinSource source, AppState returnTo) {
+        GameProgress::collect(source);
+        coinRevealSource = source;
+        coinRevealReturn = returnTo;
+        coinRevealTimer = 0.0f;
+        coinRevealMeasured = false;
+        if (!coinLoaded) {
+            coinLoaded = coinModel.load("assets/models/coin/model.gltf");
+            if (coinLoaded) {
+                glm::vec3 cmn = coinModel.boundsMin();
+                glm::vec3 cmx = coinModel.boundsMax();
+                float coinH = cmx.y - cmn.y;
+                coinScale = (coinH > 0.0001f) ? coinTargetHeight / coinH : 1.0f;
+            }
+        }
+        glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        gHouseCapturedMouse = false;
+        bodegaMouseCaptured = false;
+        banoMouseCaptured = false;
+        if (hasStepsSound && ma_sound_is_playing(&stepsSound)) ma_sound_stop(&stepsSound);
+        state = AppState::CoinReveal;
+    };
+
+    // Etiqueta localizada del cuarto de origen de una moneda.
+    auto coinLabel = [&](CoinSource s) -> std::string {
+        bool es = Localization::current() == Language::Spanish;
+        switch (s) {
+            case CoinSource::Bano:       return es ? "Bano"        : "Bathroom";
+            case CoinSource::Bodega:     return es ? "Bodega"      : "Storage";
+            case CoinSource::Dormitorio: return es ? "Dormitorio"  : "Bedroom";
+            case CoinSource::Garaje:     return es ? "Garaje"      : "Garage";
+        }
+        return "";
     };
 
     // For delta time tracking
@@ -1304,6 +1377,12 @@ int main() {
                     };
                     skyboxHouseTex = new CubemapTexture(houseSkyFaces);
                     placeCameraInsideHouse();
+                    // Restaurar mecanicas de movilidad de la casa (no las del garaje)
+                    isInGarage = false;
+                    eyeHeight = 2.0f;
+                    playerRadius = 0.3f;
+                    houseVerticalVelocity = 0.0f;
+                    jumpCount = 0;
                 }
             }
 
@@ -1416,6 +1495,12 @@ int main() {
                     };
                     skyboxHouseTex = new CubemapTexture(houseSkyFaces);
                     placeCameraInsideHouse();
+                    // Restaurar mecanicas de movilidad de la casa (no las del garaje)
+                    isInGarage = false;
+                    eyeHeight = 2.0f;
+                    playerRadius = 0.3f;
+                    houseVerticalVelocity = 0.0f;
+                    jumpCount = 0;
                 }
             }
             if (!gHouseCapturedMouse) {
@@ -1550,6 +1635,11 @@ int main() {
             }
 
             camPos = next;
+            // Recoger la moneda del garaje (parkour) por proximidad
+            if (isInGarage && coinLoaded && !GameProgress::hasCoin(CoinSource::Garaje)
+                && glm::distance(camPos, coinPos) < 1.6f) {
+                startCoinReveal(CoinSource::Garaje, AppState::HouseWalk);
+            }
             // Door interaction
             {
                 bool eKeyDown = glfwGetKey(gWindow, GLFW_KEY_E) == GLFW_PRESS;
@@ -1559,7 +1649,7 @@ int main() {
                         if (eKeyDown && !puertaEKeyHeld) {
                             if (puerta.esBodega) {
                                 if (hasAmbientLoop) ma_sound_stop(&ambientLoop);
-                                bodegaGame.init(WINDOW_WIDTH, WINDOW_HEIGHT);
+                                bodegaGame.init(WINDOW_WIDTH, WINDOW_HEIGHT, &engine);
                                 bodegaMouseCaptured = false;
                                 state = AppState::Bodega;
                                 break;
@@ -1568,6 +1658,26 @@ int main() {
                                 banoMouseCaptured = false;
                                 state = AppState::Bano;
                                 break;
+                            } else if (puerta.esSalida) {
+                                // Solo se puede escapar con las 4 monedas
+                                if (GameProgress::allCollected()) {
+                                    glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                                    gHouseCapturedMouse = false;
+                                    if (hasStepsSound) {
+                                        ma_sound_stop(&stepsSound);
+                                        ma_sound_uninit(&stepsSound);
+                                        hasStepsSound = false;
+                                    }
+                                    houseCollider.destroy();
+                                    houseModel.destroy();
+                                    houseLoaded = false;
+                                    gShowCollisionDebug = false;
+                                    gCreditsPaused = false;
+                                    gCreditsPauseStarted = 0.0;
+                                    gCreditsPauseAccum = glfwGetTime();
+                                    state = AppState::Credits;
+                                    break;
+                                }
                             } else if (puerta.destino) {
                                 pendingRoomPath = puerta.destino->rutaModelo;
                                 pendingRoomSpawn = puerta.destino->puntoAparicion;
@@ -1621,6 +1731,15 @@ int main() {
             modelShader.setFloat("uSpecIntensity", 0.25f);
             if (houseLoaded) {
                 houseModel.draw(modelShader, view, projection, model);
+                // Moneda del garaje
+                if (isInGarage && coinLoaded && !GameProgress::hasCoin(CoinSource::Garaje)) {
+                    glm::mat4 coinMat = glm::translate(glm::mat4(1.0f), coinPos);
+                    coinMat = glm::scale(coinMat, glm::vec3(coinScale));
+                    modelShader.setMat4("uModel", glm::value_ptr(coinMat));
+                    modelShader.setFloat("uAlphaCutoff", 0.5f);
+                    coinModel.draw(modelShader, view, projection, coinMat);
+                    modelShader.setFloat("uAlphaCutoff", 0.0f);
+                }
                 if (gShowCollisionDebug) {
                     glEnable(GL_DEPTH_TEST);
                     houseCollider.drawDebug(modelShader, view, projection);
@@ -1635,15 +1754,49 @@ int main() {
                 "POS: " + std::to_string(camPos.x) + ", " + std::to_string(camPos.y) + ", " + std::to_string(camPos.z),
                 20.0f, 20.0f, 0.45f, glm::vec3(0.2f, 1.0f, 0.2f)
             );
+            // HUD de monedas (esquina superior derecha)
+            {
+                bool es = Localization::current() == Language::Spanish;
+                std::string header = (es ? "Monedas: " : "Coins: ")
+                                   + std::to_string(GameProgress::coinCount()) + " / "
+                                   + std::to_string(GameProgress::TOTAL_COINS);
+                glm::vec2 hSz = textRenderer.getTextSize(header, 0.5f);
+                textRenderer.renderText(header, WINDOW_WIDTH - hSz.x - 24.0f, 24.0f, 0.5f,
+                                        glm::vec3(1.0f, 0.86f, 0.45f));
+                float ly = 60.0f;
+                const CoinSource all[4] = { CoinSource::Bano, CoinSource::Bodega,
+                                            CoinSource::Dormitorio, CoinSource::Garaje };
+                for (CoinSource cs : all) {
+                    bool got = GameProgress::hasCoin(cs);
+                    std::string line = std::string(got ? "* " : "- ") + coinLabel(cs);
+                    glm::vec2 lSz = textRenderer.getTextSize(line, 0.34f);
+                    glm::vec3 col = got ? glm::vec3(0.95f, 0.82f, 0.40f) : glm::vec3(0.55f, 0.55f, 0.55f);
+                    textRenderer.renderText(line, WINDOW_WIDTH - lSz.x - 24.0f, ly, 0.34f, col);
+                    ly += 26.0f;
+                }
+            }
             // Door prompt overlay
             for (const auto& puerta : puertas) {
                 glm::vec3 d = glm::abs(camPos - puerta.posicion);
                 if (d.x < puerta.tamano.x && d.y < puerta.tamano.y && d.z < puerta.tamano.z) {
-                    glm::vec2 msgSz = textRenderer.getTextSize(puerta.mensaje, 0.5f);
+                    bool es = Localization::current() == Language::Spanish;
+                    std::string msg = puerta.mensaje;
+                    glm::vec3 msgCol(1.0f, 0.95f, 0.8f);
+                    if (puerta.esSalida) {
+                        if (GameProgress::allCollected()) {
+                            msg = es ? "Presiona E para escapar" : "Press E to escape";
+                            msgCol = glm::vec3(0.5f, 1.0f, 0.55f);
+                        } else {
+                            msg = (es ? "Recolecta las 4 monedas para escapar (" : "Collect all 4 coins to escape (")
+                                + std::to_string(GameProgress::coinCount()) + "/4)";
+                            msgCol = glm::vec3(1.0f, 0.6f, 0.5f);
+                        }
+                    }
+                    glm::vec2 msgSz = textRenderer.getTextSize(msg, 0.5f);
                     textRenderer.renderText(
-                        puerta.mensaje,
+                        msg,
                         (WINDOW_WIDTH - msgSz.x) / 2.0f, WINDOW_HEIGHT * 0.55f,
-                        0.5f, glm::vec3(1.0f, 0.95f, 0.8f)
+                        0.5f, msgCol
                     );
                     break;
                 }
@@ -1707,6 +1860,121 @@ int main() {
                     textRenderer.renderText(visible, textX, textY, 0.55f, glm::vec3(1.0f, 1.0f, 1.0f));
                 }
             }
+        } else if (state == AppState::CoinReveal) {
+            // ── Revelación de moneda: pantalla oscura, moneda girando bajo una
+            //    luz cenital, con texto guía. Dura unos segundos y vuelve a la casa.
+            coinRevealTimer += dt;
+
+            // Medir el modelo una sola vez para centrarlo y escalarlo.
+            if (!coinRevealMeasured && coinLoaded) {
+                glm::vec3 cmn = coinModel.boundsMin();
+                glm::vec3 cmx = coinModel.boundsMax();
+                coinRevealCenter = (cmn + cmx) * 0.5f;
+                glm::vec3 sz = cmx - cmn;
+                float biggest = std::max(sz.x, std::max(sz.y, sz.z));
+                coinRevealFitScale = (biggest > 0.0001f) ? 2.0f / biggest : 1.0f;
+                coinRevealMeasured = true;
+            }
+
+            float fadeIn  = std::min(coinRevealTimer / 0.6f, 1.0f);
+            float fadeOut = std::min(std::max((coinRevealDuration - coinRevealTimer) / 0.5f, 0.0f), 1.0f);
+            float contentAlpha = fadeIn * fadeOut;
+            float pulse = 0.5f + 0.5f * std::sin(coinRevealTimer * 3.0f);
+
+            float cx = WINDOW_WIDTH * 0.5f;
+            float cy = WINDOW_HEIGHT * 0.5f;
+
+            // 1) Oscurecer la pantalla
+            glDisable(GL_DEPTH_TEST);
+            renderSprite(quadVAO, spriteShader, *loadingBarTex, proj,
+                         0.0f, 0.0f, (float)WINDOW_WIDTH, (float)WINDOW_HEIGHT,
+                         glm::vec4(0.02f, 0.02f, 0.03f, 0.92f * fadeIn));
+
+            // 2) Haz de luz cenital + halo detrás de la moneda
+            renderSprite(quadVAO, spriteShader, *glowTex, proj,
+                         cx - 110.0f, 0.0f, 220.0f, cy + 40.0f,
+                         glm::vec4(1.0f, 0.92f, 0.6f, 0.16f * contentAlpha));
+            float haloSize = 540.0f + pulse * 30.0f;
+            renderSprite(quadVAO, spriteShader, *glowTex, proj,
+                         cx - haloSize * 0.5f, cy - haloSize * 0.5f, haloSize, haloSize,
+                         glm::vec4(1.0f, 0.85f, 0.45f, 0.32f * contentAlpha));
+
+            // 3) Moneda 3D girando bajo una luz desde arriba
+            if (coinLoaded) {
+                glEnable(GL_DEPTH_TEST);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                glm::vec3 eye(0.0f, 0.35f, 4.5f);
+                glm::mat4 view = glm::lookAt(eye, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::mat4 projection = glm::perspective(glm::radians(45.0f),
+                                       (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 50.0f);
+                glm::mat4 m(1.0f);
+                m = glm::rotate(m, glm::radians(18.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                m = glm::rotate(m, coinRevealTimer * 1.8f, glm::vec3(0.0f, 1.0f, 0.0f));
+                m = glm::scale(m, glm::vec3(coinRevealFitScale));
+                m = glm::translate(m, -coinRevealCenter);
+
+                modelShader.use();
+                modelShader.setMat4("uView", glm::value_ptr(view));
+                modelShader.setMat4("uProjection", glm::value_ptr(projection));
+                modelShader.setMat4("uModel", glm::value_ptr(m));
+                modelShader.setVec3("uCamPos", eye.x, eye.y, eye.z);
+                // Ambiente dorado alto: evita que las caras en sombra se vean
+                // negras al girar (el oro siempre debe brillar).
+                modelShader.setVec3("uAmbientColor", 0.55f, 0.46f, 0.26f);
+                // Luz principal cenital (desde arriba), cálida y pulsante
+                modelShader.setVec3("uMainLightDir", 0.0f, 1.0f, 0.18f);
+                modelShader.setVec3("uMainLightColor", 1.0f, 0.92f, 0.62f);
+                modelShader.setFloat("uMainLightIntensity", 1.2f + pulse * 0.4f);
+                // Relleno desde la cámara: la cara que mira al espectador siempre
+                // recibe luz, asi nunca queda negra y resaltan los reflejos.
+                modelShader.setVec3("uFillLightDir", 0.0f, 0.2f, 1.0f);
+                modelShader.setVec3("uFillLightColor", 1.0f, 0.9f, 0.62f);
+                modelShader.setFloat("uFillLightIntensity", 0.85f);
+                modelShader.setFloat("uShininess", 28.0f);
+                modelShader.setFloat("uSpecIntensity", 1.1f);
+                modelShader.setInt("uFogEnabled", 0);
+                modelShader.setFloat("uAlphaCutoff", 0.5f);   // recorta el fondo transparente de la textura
+
+                glDisable(GL_CULL_FACE);
+                coinModel.setTintColor(glm::vec3(contentAlpha));
+                coinModel.draw(modelShader, view, projection, m);
+                coinModel.setTintColor(glm::vec3(1.0f));
+                modelShader.setFloat("uAlphaCutoff", 0.0f);   // restaura para los demás modelos
+                glDisable(GL_DEPTH_TEST);
+            }
+
+            // 4) Brillo de la fuente de luz por encima de la moneda
+            float topGlow = 300.0f + pulse * 40.0f;
+            renderSprite(quadVAO, spriteShader, *glowTex, proj,
+                         cx - topGlow * 0.5f, WINDOW_HEIGHT * 0.14f - topGlow * 0.5f, topGlow, topGlow,
+                         glm::vec4(1.0f, 0.95f, 0.7f, (0.5f + pulse * 0.3f) * contentAlpha));
+
+            // 5) Texto guía
+            bool es = Localization::current() == Language::Spanish;
+            std::string guide;
+            if (GameProgress::allCollected()) {
+                guide = es ? "Tienes las 4 monedas. Escapa por la puerta cerrada..."
+                           : "You have all 4 coins. Escape through the locked door...";
+            } else {
+                guide = "you must explore the others rooms for another coin...";
+            }
+            glm::vec2 gSz = textRenderer.getTextSize(guide, 0.6f);
+            textRenderer.renderText(guide, (WINDOW_WIDTH - gSz.x) / 2.0f, WINDOW_HEIGHT * 0.74f,
+                                    0.6f, glm::vec3(1.0f, 0.95f, 0.78f), contentAlpha);
+
+            // Contador de monedas
+            std::string sub = (es ? "Moneda obtenida en: " : "Coin obtained in: ") + coinLabel(coinRevealSource)
+                            + "   (" + std::to_string(GameProgress::coinCount()) + "/"
+                            + std::to_string(GameProgress::TOTAL_COINS) + ")";
+            glm::vec2 sSz = textRenderer.getTextSize(sub, 0.4f);
+            textRenderer.renderText(sub, (WINDOW_WIDTH - sSz.x) / 2.0f, WINDOW_HEIGHT * 0.80f,
+                                    0.4f, glm::vec3(0.92f, 0.82f, 0.5f), contentAlpha);
+
+            if (coinRevealTimer >= coinRevealDuration) {
+                state = coinRevealReturn;
+                if (state == AppState::HouseWalk) gHouseCapturedMouse = false;
+                firstMouse = true;
+            }
         } else if (state == AppState::Bodega) {
             if (!bodegaMouseCaptured) {
                 glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -1720,12 +1988,17 @@ int main() {
                 glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
                 bodegaMouseCaptured = false;
             } else if (bodegaGame.wantsExit()) {
+                bool won = bodegaGame.result() == BodegaResult::Won;
                 bodegaGame.destroy();
                 if (hasAmbientLoop) ma_sound_start(&ambientLoop);
-                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-                gHouseCapturedMouse = false;
-                state = AppState::HouseWalk;
                 firstMouse = true;
+                if (won) {
+                    startCoinReveal(CoinSource::Bodega, AppState::HouseWalk);
+                } else {
+                    glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                    gHouseCapturedMouse = false;
+                    state = AppState::HouseWalk;
+                }
             } else {
                 bodegaGame.render(modelShader, spriteShader, quadVAO,
                                   textRenderer, proj, WINDOW_WIDTH, WINDOW_HEIGHT, *underlineTex);
@@ -1743,11 +2016,16 @@ int main() {
                 glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
                 banoMouseCaptured = false;
             } else if (banoGame.wantsExit()) {
+                bool won = banoGame.result() == BanoResult::Won;
                 banoGame.destroy();
-                glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-                gHouseCapturedMouse = false;
-                state = AppState::HouseWalk;
                 firstMouse = true;
+                if (won) {
+                    startCoinReveal(CoinSource::Bano, AppState::HouseWalk);
+                } else {
+                    glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                    gHouseCapturedMouse = false;
+                    state = AppState::HouseWalk;
+                }
             } else {
                 banoGame.render(modelShader, spriteShader, quadVAO,
                                 textRenderer, proj, WINDOW_WIDTH, WINDOW_HEIGHT, *underlineTex);
@@ -1859,12 +2137,16 @@ int main() {
 
             // Check exit
             if (escapeRoom.quiereSalir()) {
+                bool won = escapeRoom.completo();
                 escapeRoom.destroy();
                 glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 gHouseCapturedMouse = false;
                 houseCollider.destroy();
                 houseModel.destroy();
                 houseLoaded = false;
+                // Asegurarse de que el dialogo de intro no se reproduzca al volver
+                houseDialogActive = false;
+                houseDialogDismissed = true;
                 roomLoadingStarted = false;
                 roomLoadingTimer = 0.0f;
                 houseVerticalVelocity = 0.0f;
@@ -1874,7 +2156,11 @@ int main() {
                     puertas = puertasCasaRespaldo;
                     puertasCasaRespaldo.clear();
                 }
-                state = AppState::HouseWalk;
+                if (won) {
+                    startCoinReveal(CoinSource::Dormitorio, AppState::HouseWalk);
+                } else {
+                    state = AppState::HouseWalk;
+                }
             }
 
             // Footsteps
@@ -2143,6 +2429,7 @@ int main() {
 
     delete skyboxTex;
     delete skyboxHouseTex;
+    coinModel.destroy();
     for (auto* t : cloudFrames) delete t;
     delete glowTex;
     for (auto* t : spriteFrames) delete t;

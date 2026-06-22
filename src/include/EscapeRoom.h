@@ -68,6 +68,9 @@ private:
     bool mQuiereSalir = false;
     float mCompletadoTimer = 0.0f;
     bool mPrimeraActualizacion = true;
+    bool mInstrEsperandoTecla = true;   // true = mostrando instrucciones, esperando input
+    bool mInstrTeclaRetenida  = true;   // true = hay teclas presionadas del ingreso, esperar release
+    float mInstrConteo        = 3.0f;   // countdown antes de empezar
     bool mEKeyAnterior = false;
     bool mQKeyAnterior = false;
     bool mInventarioAbierto = false;

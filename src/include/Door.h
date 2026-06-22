@@ -15,4 +15,5 @@ struct Puerta {
     Cuarto* destino;
     bool esBodega = false;
     bool esBano = false;
+    bool esSalida = false;   // puerta de escape final (requiere las 4 monedas)
 };
