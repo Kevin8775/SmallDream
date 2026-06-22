@@ -764,6 +764,10 @@ int main() {
             }
         }
 
+        eyeHeight = 2.0f;
+        playerRadius = 0.3f;
+        isInGarage = false;
+
         cloudAnimTimer = 0.0f;
         cloudTilesGenerated = false;
         cloudTiles.clear();
@@ -1338,6 +1342,9 @@ int main() {
             }
 
             if (p >= 1.0f) {
+                eyeHeight = 2.0f;
+                playerRadius = 0.3f;
+                isInGarage = false;
                 state = AppState::HouseWalk;
                 houseLoadingStarted = false;
             }
@@ -1396,6 +1403,9 @@ int main() {
             }
         } else if (state == AppState::HouseWalk) {
             if (!houseLoaded) {
+                eyeHeight = 2.0f;
+                playerRadius = 0.3f;
+                isInGarage = false;
                 houseLoaded = houseModel.load("assets/models/house/scene.gltf");
                 if (houseLoaded) {
                     houseMin = houseModel.boundsMin();
@@ -1722,6 +1732,9 @@ int main() {
             } else if (bodegaGame.wantsExit()) {
                 bodegaGame.destroy();
                 if (hasAmbientLoop) ma_sound_start(&ambientLoop);
+                eyeHeight = 2.0f;
+                playerRadius = 0.3f;
+                isInGarage = false;
                 glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 gHouseCapturedMouse = false;
                 state = AppState::HouseWalk;
@@ -1744,6 +1757,9 @@ int main() {
                 banoMouseCaptured = false;
             } else if (banoGame.wantsExit()) {
                 banoGame.destroy();
+                eyeHeight = 2.0f;
+                playerRadius = 0.3f;
+                isInGarage = false;
                 glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 gHouseCapturedMouse = false;
                 state = AppState::HouseWalk;
@@ -1870,6 +1886,9 @@ int main() {
                 houseVerticalVelocity = 0.0f;
                 gShowCollisionDebug = false;
                 firstMouse = true;
+                eyeHeight = 2.0f;
+                playerRadius = 0.3f;
+                isInGarage = false;
                 if (!puertasCasaRespaldo.empty()) {
                     puertas = puertasCasaRespaldo;
                     puertasCasaRespaldo.clear();
