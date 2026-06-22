@@ -49,6 +49,7 @@
     <ClCompile Include="src\Model.cpp" />
     <ClCompile Include="src\MeshCollider.cpp" />
     <ClCompile Include="src\BodegaGame.cpp" />
+    <ClCompile Include="src\BanoGame.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\include\Shader.h" />

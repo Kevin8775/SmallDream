@@ -14,4 +14,5 @@ struct Puerta {
     std::string mensaje;
     Cuarto* destino;
     bool esBodega = false;
+    bool esBano   = false;
 };
