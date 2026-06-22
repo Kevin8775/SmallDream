@@ -19,6 +19,8 @@ struct ModelMesh {
     GLuint ebo = 0;
     Texture* diffuseTexture = nullptr;
     glm::vec3 baseColor = glm::vec3(1.0f);
+    glm::vec3 boundingCenter = glm::vec3(0.0f);
+    float boundingRadius = 0.0f;
     std::vector<ModelVertex> vertices;
     std::vector<unsigned int> indices;
     size_t indexCount = 0;
@@ -30,7 +32,7 @@ struct ModelMesh {
 class Model {
 public:
     bool load(const std::string& path);
-    void draw(Shader& shader) const;
+    void draw(Shader& shader, const glm::mat4& view, const glm::mat4& projection, const glm::mat4& model) const;
     void destroy();
     bool isLoaded() const { return mLoaded; }
     glm::vec3 boundsMin() const { return mBoundsMin; }

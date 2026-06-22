@@ -7,6 +7,48 @@
 #include <assimp/scene.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
+#include <limits>
+
+struct FrustumPlane {
+    glm::vec3 normal;
+    float distance;
+};
+
+struct Frustum {
+    FrustumPlane planes[6];
+};
+
+static Frustum extractFrustum(const glm::mat4& vp) {
+    Frustum f;
+    f.planes[0].normal = glm::vec3(vp[0][3] + vp[0][0], vp[1][3] + vp[1][0], vp[2][3] + vp[2][0]);
+    f.planes[0].distance = vp[3][3] + vp[3][0];
+    f.planes[1].normal = glm::vec3(vp[0][3] - vp[0][0], vp[1][3] - vp[1][0], vp[2][3] - vp[2][0]);
+    f.planes[1].distance = vp[3][3] - vp[3][0];
+    f.planes[2].normal = glm::vec3(vp[0][3] + vp[0][1], vp[1][3] + vp[1][1], vp[2][3] + vp[2][1]);
+    f.planes[2].distance = vp[3][3] + vp[3][1];
+    f.planes[3].normal = glm::vec3(vp[0][3] - vp[0][1], vp[1][3] - vp[1][1], vp[2][3] - vp[2][1]);
+    f.planes[3].distance = vp[3][3] - vp[3][1];
+    f.planes[4].normal = glm::vec3(vp[0][3] + vp[0][2], vp[1][3] + vp[1][2], vp[2][3] + vp[2][2]);
+    f.planes[4].distance = vp[3][3] + vp[3][2];
+    f.planes[5].normal = glm::vec3(vp[0][3] - vp[0][2], vp[1][3] - vp[1][2], vp[2][3] - vp[2][2]);
+    f.planes[5].distance = vp[3][3] - vp[3][2];
+    for (int i = 0; i < 6; ++i) {
+        float len = glm::length(f.planes[i].normal);
+        if (len > 1e-8f) {
+            f.planes[i].normal /= len;
+            f.planes[i].distance /= len;
+        }
+    }
+    return f;
+}
+
+static bool sphereInFrustum(const Frustum& f, const glm::vec3& center, float radius) {
+    for (int i = 0; i < 6; ++i) {
+        float dist = glm::dot(f.planes[i].normal, center) + f.planes[i].distance;
+        if (dist < -radius) return false;
+    }
+    return true;
+}
 
 static std::string joinPath(const std::string& base, const std::string& rel) {
     if (rel.empty()) return base;
@@ -72,6 +114,18 @@ bool Model::load(const std::string& path) {
         m.vertices = vertices;
         m.indices = indices;
         m.indexCount = indices.size();
+        {
+            glm::vec3 center(0.0f);
+            for (const auto& v : vertices) center += v.position;
+            center /= (float)vertices.size();
+            float maxDistSq = 0.0f;
+            for (const auto& v : vertices) {
+                float d = glm::dot(v.position - center, v.position - center);
+                if (d > maxDistSq) maxDistSq = d;
+            }
+            m.boundingCenter = center;
+            m.boundingRadius = std::sqrt(maxDistSq);
+        }
         glGenVertexArrays(1, &m.vao);
         glGenBuffers(1, &m.vbo);
         glGenBuffers(1, &m.ebo);
@@ -117,10 +171,23 @@ bool Model::load(const std::string& path) {
     return true;
 }
 
-void Model::draw(Shader& shader) const {
+void Model::draw(Shader& shader, const glm::mat4& view, const glm::mat4& projection, const glm::mat4& model) const {
+    glm::mat4 vp = projection * view;
+    Frustum frustum = extractFrustum(vp);
+    glm::vec3 modelScale(
+        glm::length(glm::vec3(model[0])),
+        glm::length(glm::vec3(model[1])),
+        glm::length(glm::vec3(model[2]))
+    );
+    float maxScale = glm::max(modelScale.x, glm::max(modelScale.y, modelScale.z));
+
     shader.use();
     shader.setVec3("uTintColor", mTintColor.r, mTintColor.g, mTintColor.b);
     for (const auto& mesh : mMeshes) {
+        glm::vec4 worldCenter = model * glm::vec4(mesh.boundingCenter, 1.0f);
+        float worldRadius = mesh.boundingRadius * maxScale;
+        if (!sphereInFrustum(frustum, glm::vec3(worldCenter), worldRadius))
+            continue;
         shader.setVec3("uBaseColor", mesh.baseColor.r, mesh.baseColor.g, mesh.baseColor.b);
         if (mesh.diffuseTexture && mesh.diffuseTexture->isValid()) {
             shader.setInt("uHasTexture", 1);

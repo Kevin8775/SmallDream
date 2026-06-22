@@ -12,6 +12,11 @@ struct CollisionTriangle {
     glm::vec3 v0, v1, v2;
 };
 
+struct MeshCollisionInfo {
+    glm::vec3 center;
+    float radius;
+};
+
 class MeshCollider {
 public:
     ~MeshCollider();
@@ -34,9 +39,11 @@ public:
 
 private:
     std::vector<CollisionTriangle> mTriangles;
+    std::vector<MeshCollisionInfo> mMeshInfos;
+    std::vector<int> mTriToMesh;
     bool mBuilt = false;
 
-    static constexpr float CELL_SIZE = 5.0f;
+    static constexpr float CELL_SIZE = 3.0f;
 
     struct Cell {
         std::vector<size_t> triIndices;

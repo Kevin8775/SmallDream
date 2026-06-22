@@ -17,6 +17,8 @@ void MeshCollider::destroy() {
     mDebugVBO = 0;
     mDebugVertexCount = 0;
     mTriangles.clear();
+    mMeshInfos.clear();
+    mTriToMesh.clear();
     mGrid.clear();
     mBuilt = false;
 }
@@ -27,6 +29,17 @@ void MeshCollider::addModel(const Model& model, const glm::mat4& transform) {
         const auto& verts = mesh.vertices;
         const auto& idx = mesh.indices;
         if (verts.empty() || idx.empty()) continue;
+
+        glm::vec4 center4 = transform * glm::vec4(mesh.boundingCenter, 1.0f);
+        float scaleX = glm::length(glm::vec3(transform[0]));
+        float scaleY = glm::length(glm::vec3(transform[1]));
+        float scaleZ = glm::length(glm::vec3(transform[2]));
+        float maxScale = glm::max(scaleX, glm::max(scaleY, scaleZ));
+        MeshCollisionInfo info;
+        info.center = glm::vec3(center4);
+        info.radius = mesh.boundingRadius * maxScale;
+        mMeshInfos.push_back(info);
+        int meshIdx = (int)mMeshInfos.size() - 1;
 
         for (size_t i = 0; i + 2 < idx.size(); i += 3) {
             glm::vec3 v0 = verts[idx[i]].position;
@@ -42,11 +55,21 @@ void MeshCollider::addModel(const Model& model, const glm::mat4& transform) {
             tri.v1 = glm::vec3(t1);
             tri.v2 = glm::vec3(t2);
             mTriangles.push_back(tri);
+            mTriToMesh.push_back(meshIdx);
         }
     }
 }
 
 void MeshCollider::addFloorQuad(float y, float xMin, float xMax, float zMin, float zMax) {
+    glm::vec3 center((xMin + xMax) * 0.5f, y, (zMin + zMax) * 0.5f);
+    float rx = (xMax - xMin) * 0.5f;
+    float rz = (zMax - zMin) * 0.5f;
+    MeshCollisionInfo info;
+    info.center = center;
+    info.radius = std::sqrt(rx * rx + rz * rz);
+    mMeshInfos.push_back(info);
+    int meshIdx = (int)mMeshInfos.size() - 1;
+
     CollisionTriangle t0, t1;
     t0.v0 = glm::vec3(xMin, y, zMin);
     t0.v1 = glm::vec3(xMax, y, zMin);
@@ -54,8 +77,8 @@ void MeshCollider::addFloorQuad(float y, float xMin, float xMax, float zMin, flo
     t1.v0 = glm::vec3(xMin, y, zMin);
     t1.v1 = glm::vec3(xMax, y, zMax);
     t1.v2 = glm::vec3(xMin, y, zMax);
-    mTriangles.push_back(t0);
-    mTriangles.push_back(t1);
+    mTriangles.push_back(t0); mTriToMesh.push_back(meshIdx);
+    mTriangles.push_back(t1); mTriToMesh.push_back(meshIdx);
 }
 
 void MeshCollider::build() {
@@ -193,6 +216,14 @@ bool MeshCollider::collideSphere(const glm::vec3& center, float radius,
     glm::vec3 bestNormal(0.0f);
     float bestPen = 0.0f;
 
+    std::vector<bool> meshActive(mMeshInfos.size(), false);
+    for (int i = 0; i < (int)mMeshInfos.size(); ++i) {
+        glm::vec3 diff = center - mMeshInfos[i].center;
+        float combined = radius + mMeshInfos[i].radius;
+        if (glm::dot(diff, diff) < combined * combined)
+            meshActive[i] = true;
+    }
+
     glm::vec3 sphereMin = center - glm::vec3(radius);
     glm::vec3 sphereMax = center + glm::vec3(radius);
 
@@ -209,6 +240,7 @@ bool MeshCollider::collideSphere(const glm::vec3& center, float radius,
 
                 const auto& cell = it->second;
                 for (size_t triIdx : cell.triIndices) {
+                    if (!meshActive[mTriToMesh[triIdx]]) continue;
                     const auto& tri = mTriangles[triIdx];
 
                     glm::vec3 te1 = tri.v1 - tri.v0;
@@ -263,6 +295,14 @@ float MeshCollider::getFloorHeight(const glm::vec3& position, float maxDist) con
     float bestT = 1e9f;
     bool found = false;
 
+    std::vector<bool> meshActive(mMeshInfos.size(), false);
+    for (int i = 0; i < (int)mMeshInfos.size(); ++i) {
+        glm::vec3 diff = position - mMeshInfos[i].center;
+        float combined = maxDist + mMeshInfos[i].radius;
+        if (glm::dot(diff, diff) < combined * combined)
+            meshActive[i] = true;
+    }
+
     glm::vec3 rayEnd = position - glm::vec3(0.0f, maxDist, 0.0f);
     glm::vec3 rmin = glm::min(position, rayEnd);
     glm::vec3 rmax = glm::max(position, rayEnd);
@@ -280,6 +320,7 @@ float MeshCollider::getFloorHeight(const glm::vec3& position, float maxDist) con
 
                 const auto& cell = it->second;
                 for (size_t triIdx : cell.triIndices) {
+                    if (!meshActive[mTriToMesh[triIdx]]) continue;
                     const auto& tri = mTriangles[triIdx];
 
                     glm::vec3 e1 = tri.v1 - tri.v0;

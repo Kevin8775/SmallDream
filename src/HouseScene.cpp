@@ -11,8 +11,8 @@ bool HouseScene::load(const std::string& directory) {
     return mLoaded;
 }
 
-void HouseScene::render(Shader& shader) {
-    mModel.draw(shader);
+void HouseScene::render(Shader& shader, const glm::mat4& view, const glm::mat4& projection, const glm::mat4& model) {
+    mModel.draw(shader, view, projection, model);
 }
 
 void HouseScene::destroy() {

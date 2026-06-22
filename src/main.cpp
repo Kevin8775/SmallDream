@@ -1445,7 +1445,7 @@ int main() {
             modelShader.setFloat("uShininess", 24.0f);
             modelShader.setFloat("uSpecIntensity", 0.25f);
             if (houseLoaded) {
-                houseModel.draw(modelShader);
+                houseModel.draw(modelShader, view, projection, model);
                 if (gShowCollisionDebug) {
                     glEnable(GL_DEPTH_TEST);
                     houseCollider.drawDebug(modelShader, view, projection);
