@@ -19,6 +19,7 @@ void MeshCollider::destroy() {
     mTriangles.clear();
     mMeshInfos.clear();
     mTriToMesh.clear();
+    mClusters.clear();
     mGrid.clear();
     mBuilt = false;
 }
@@ -57,6 +58,40 @@ void MeshCollider::addModel(const Model& model, const glm::mat4& transform) {
             mTriangles.push_back(tri);
             mTriToMesh.push_back(meshIdx);
         }
+    }
+
+    // Build mesh clusters (BVH broad-phase)
+    mClusters.clear();
+    for (int i = 0; i < (int)mMeshInfos.size(); ++i) {
+        bool added = false;
+        for (auto& cluster : mClusters) {
+            float dist = glm::distance(mMeshInfos[i].center, cluster.center);
+            if (dist < CLUSTER_DISTANCE) {
+                cluster.meshIndices.push_back(i);
+                added = true;
+                break;
+            }
+        }
+        if (!added) {
+            MeshCluster c;
+            c.center = mMeshInfos[i].center;
+            c.radius = mMeshInfos[i].radius;
+            c.meshIndices.push_back(i);
+            mClusters.push_back(c);
+        }
+    }
+    // Recompute cluster bounding spheres
+    for (auto& cluster : mClusters) {
+        glm::vec3 sum(0.0f);
+        for (int idx : cluster.meshIndices)
+            sum += mMeshInfos[idx].center;
+        cluster.center = sum / (float)cluster.meshIndices.size();
+        float maxDist = 0.0f;
+        for (int idx : cluster.meshIndices) {
+            float d = glm::length(cluster.center - mMeshInfos[idx].center) + mMeshInfos[idx].radius;
+            if (d > maxDist) maxDist = d;
+        }
+        cluster.radius = maxDist;
     }
 }
 
@@ -217,11 +252,14 @@ bool MeshCollider::collideSphere(const glm::vec3& center, float radius,
     float bestPen = 0.0f;
 
     std::vector<bool> meshActive(mMeshInfos.size(), false);
-    for (int i = 0; i < (int)mMeshInfos.size(); ++i) {
-        glm::vec3 diff = center - mMeshInfos[i].center;
-        float combined = radius + mMeshInfos[i].radius;
-        if (glm::dot(diff, diff) < combined * combined)
-            meshActive[i] = true;
+    for (const auto& cluster : mClusters) {
+        glm::vec3 diff = center - cluster.center;
+        float combined = radius + cluster.radius;
+        if (glm::dot(diff, diff) < combined * combined) {
+            for (int meshIdx : cluster.meshIndices) {
+                meshActive[meshIdx] = true;
+            }
+        }
     }
 
     glm::vec3 sphereMin = center - glm::vec3(radius);
@@ -296,11 +334,14 @@ float MeshCollider::getFloorHeight(const glm::vec3& position, float maxDist) con
     bool found = false;
 
     std::vector<bool> meshActive(mMeshInfos.size(), false);
-    for (int i = 0; i < (int)mMeshInfos.size(); ++i) {
-        glm::vec3 diff = position - mMeshInfos[i].center;
-        float combined = maxDist + mMeshInfos[i].radius;
-        if (glm::dot(diff, diff) < combined * combined)
-            meshActive[i] = true;
+    for (const auto& cluster : mClusters) {
+        glm::vec3 diff = position - cluster.center;
+        float combined = maxDist + cluster.radius;
+        if (glm::dot(diff, diff) < combined * combined) {
+            for (int meshIdx : cluster.meshIndices) {
+                meshActive[meshIdx] = true;
+            }
+        }
     }
 
     glm::vec3 rayEnd = position - glm::vec3(0.0f, maxDist, 0.0f);
