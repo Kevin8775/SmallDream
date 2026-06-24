@@ -23,6 +23,7 @@
 ## Table of Contents
 
 - [Project Description](#project-description)
+- [Demo](#demo)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Game Features](#game-features)
@@ -83,6 +84,12 @@ This project was built to explore core game development concepts in C++ and Open
 | Build System | MSBuild / Visual Studio 2022 |
 | Shader Language | GLSL 3.30 core |
 | Model Format | glTF 2.0 |
+
+---
+
+## Demo
+
+🎥 [Watch the demo video](https://youtu.be/1v3akc2slpQ)
 
 ---
 
