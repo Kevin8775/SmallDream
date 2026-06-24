@@ -7,6 +7,11 @@ out vec4 fragColor;
 uniform vec3 uBaseColor = vec3(0.82, 0.82, 0.86);
 uniform sampler2D uTexture0;
 uniform int uHasTexture = 0;
+uniform vec3 uTintColor = vec3(1.0);
+
+uniform bool uFogEnabled = false;
+uniform float uFogDensity = 0.02;
+uniform vec3 uFogColor = vec3(0.8, 0.85, 0.9);
 
 uniform vec3 uAmbientColor = vec3(0.18, 0.15, 0.12);
 
@@ -45,6 +50,11 @@ void main() {
     float spec2 = pow(max(dot(n, h2), 0.0), uShininess) * uSpecIntensity * 0.4;
     lighting += (diff2 + spec2) * uFillLightColor * uFillLightIntensity;
 
-    vec3 col = base * lighting;
+    vec3 col = base * lighting * uTintColor;
+    if (uFogEnabled) {
+        float d = length(vWorldPos - uCamPos);
+        float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * d * d);
+        col = mix(col, uFogColor, clamp(fogFactor, 0.0, 1.0));
+    }
     fragColor = vec4(col, 1.0);
 }

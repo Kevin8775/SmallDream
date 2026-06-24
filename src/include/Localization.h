@@ -102,7 +102,24 @@ enum class TextId {
     VN_S5_6,
     VN_S6_0,
     VN_S6_1,
-    VN_S6_2
+    VN_S6_2,
+    HouseIntroDialog,
+    Dormitorio_Inspecionar,
+    Dormitorio_PistaTitulo1,
+    Dormitorio_PistaTexto1,
+    Dormitorio_PistaTitulo2,
+    Dormitorio_PistaTexto2,
+    Dormitorio_PistaTitulo3,
+    Dormitorio_PistaTexto3,
+    Dormitorio_PistaTitulo4,
+    Dormitorio_PistaTexto4,
+    Dormitorio_PistaTitulo5,
+    Dormitorio_PistaTexto5,
+    Dormitorio_PanelTitulo,
+    Dormitorio_CodigoError,
+    Dormitorio_CodigoCorrecto,
+    Dormitorio_Progreso,
+    Dormitorio_SalirInstruccion
 };
 
 namespace Localization {

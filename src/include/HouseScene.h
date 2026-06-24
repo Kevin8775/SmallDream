@@ -8,7 +8,7 @@ class Shader;
 class HouseScene {
 public:
     bool load(const std::string& directory);
-    void render(Shader& shader);
+    void render(Shader& shader, const glm::mat4& view, const glm::mat4& projection, const glm::mat4& model);
     void destroy();
     bool isLoaded() const;
 
